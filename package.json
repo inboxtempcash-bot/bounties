@@ -57,6 +57,6 @@
     "mpp:setup": "node cli/index.js mpp setup --skills project",
     "mpp:fund:testnet": "node cli/index.js mpp fund --rpc-url https://rpc.moderato.tempo.xyz",
     "mpp:balance": "node cli/index.js mpp balance",
-    "release:check": "node cli/index.js --help && node cli/index.js one --type text --source mpp --auto \"release smoke check\" --pricing live --mode balanced --yes"
+    "release:check": "node cli/index.js --help && node cli/index.js one --type text --source mpp --auto \"release smoke check\" --pricing live --mode balanced --payment simulated --yes"
   }
 }

@@ -59,6 +59,15 @@ export function hasPositiveBalance(text) {
   return balances.some((entry) => entry.amount > 0);
 }
 
+export function hasPositiveMainnetUsdBalance(text) {
+  const balances = parseBalances(text);
+  return balances.some((entry) =>
+    entry.amount > 0 &&
+    !entry.network &&
+    (entry.asset.toUpperCase() === "PATHUSD" || entry.asset.toUpperCase() === "USDC")
+  );
+}
+
 export function buildMppxArgs(baseArgs = {}) {
   const args = [];
   if (hasValue(baseArgs.account)) {

@@ -13,9 +13,10 @@ Provider sources:
 - `all`: combine `core` + `mpp`
 
 One-command mode:
-- `one` auto-creates MPP account, attempts testnet funding, then routes with cheapest pricing.
+- `one` auto-creates MPP account and routes with cheapest pricing.
 - For `--source mpp` or `--source all`, `one` uses real MPP payments by default.
-- If wallet is empty, it prompts top-up and opens Stripe Checkout URL automatically.
+- If wallet has no mainnet PathUSD/USDC balance, it prompts top-up and opens a funding URL automatically.
+- If no custom checkout URL is configured, it falls back to `https://wallet.tempo.xyz`.
 - Use `--payment simulated` for dry-run/demo mode.
 
 Pricing modes:
@@ -71,8 +72,8 @@ autorouter one --type video --source mpp --auto "make a 6 second teaser" --secon
 First-time user real-pay flow:
 1. CLI previews APIs found for request and auto-selects best-value option (price + rating).
 2. CLI says how to list/select alternatives.
-3. If wallet is empty, CLI prompts top-up and opens Stripe Checkout.
-4. If no checkout URL is configured yet, CLI asks once for your Stripe Checkout URL and saves it to `~/.autorouter/config.json`.
+3. If mainnet wallet balance is empty, CLI prompts top-up and opens a funding URL.
+4. If no checkout URL is configured, CLI uses `https://wallet.tempo.xyz` by default (or asks for custom URL in interactive terminals and saves it to `~/.autorouter/config.json`).
 5. After checkout, CLI waits for wallet balance update and then continues request execution.
 
 Optional explicit setup:
@@ -107,8 +108,10 @@ MPP configuration:
 - `AUTOROUTER_MPP_CHARGE_URL_<PROVIDER_NAME>` (provider name uppercased, non-alphanumeric replaced with `_`)
 - `AUTOROUTER_MPP_METHOD_OPTS` (comma-separated `key=value` pairs, passed to `mppx --method-opt`)
 - `AUTOROUTER_MPP_AUTO_CREATE_ACCOUNT` (`1` by default)
-- `AUTOROUTER_MPP_AUTO_FUND_TESTNET` (`1` by default)
+- `AUTOROUTER_MPP_AUTO_FUND_TESTNET` (`0` by default; set `1` only for faucet-style testnet demos)
+- `AUTOROUTER_REQUIRE_MAINNET_BALANCE` (`1` by default for `one` top-up checks)
 - `AUTOROUTER_STRIPE_CHECKOUT_URL` (optional override; otherwise CLI uses saved value from `~/.autorouter/config.json`)
+- `AUTOROUTER_DEFAULT_TOPUP_URL` (defaults to `https://wallet.tempo.xyz`)
 
 Execution configuration:
 - `OPENROUTER_API_KEY` enables real model completions from selected provider model IDs.

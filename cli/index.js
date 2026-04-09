@@ -18,6 +18,7 @@ import {
   accountView,
   buildMppxArgs,
   ensureAccount,
+  hasPositiveMainnetUsdBalance,
   hasPositiveBalance,
   runMppx
 } from "../payments/mppx.js";
@@ -421,6 +422,14 @@ function looksLikeHttpUrl(value) {
   return typeof value === "string" && /^https?:\/\//i.test(value.trim());
 }
 
+function defaultTopupUrl() {
+  const candidate = process.env.AUTOROUTER_DEFAULT_TOPUP_URL || "https://wallet.tempo.xyz";
+  if (!looksLikeHttpUrl(candidate)) {
+    throw new Error("Invalid AUTOROUTER_DEFAULT_TOPUP_URL. Provide a full http(s) URL.");
+  }
+  return candidate.trim();
+}
+
 async function resolveCheckoutUrl(options) {
   const envUrl = process.env.AUTOROUTER_STRIPE_CHECKOUT_URL || process.env.AUTOROUTER_ONRAMP_URL;
   if (looksLikeHttpUrl(envUrl)) {
@@ -433,13 +442,21 @@ async function resolveCheckoutUrl(options) {
     return savedUrl.trim();
   }
 
+  const fallbackUrl = defaultTopupUrl();
+
   if (!process.stdin.isTTY) {
-    throw new Error(
-      `Wallet is empty and no Stripe checkout URL is configured. Set AUTOROUTER_STRIPE_CHECKOUT_URL or save one in ${CONFIG_FILE}.`
-    );
+    console.log(`No checkout URL configured. Using default top-up URL: ${fallbackUrl}`);
+    return fallbackUrl;
   }
 
   console.log("No Stripe checkout URL is configured yet.");
+  const useFallback = options.yes
+    ? true
+    : await confirmYes(`Use default top-up URL (${fallbackUrl})? [Y/n] `, true);
+  if (useFallback) {
+    return fallbackUrl;
+  }
+
   const entered = (await promptUser("Paste your Stripe Checkout URL for wallet top-ups (or press Enter to cancel): ")).trim();
   if (!entered) {
     throw new Error("Wallet funding canceled. No checkout URL configured.");
@@ -473,7 +490,7 @@ async function runFiatTopupFlow(options) {
 
   try {
     await openExternalUrl(checkoutUrl);
-    console.log(`Opened Stripe Checkout: ${checkoutUrl}`);
+    console.log(`Opened top-up URL: ${checkoutUrl}`);
   } catch (_error) {
     console.log(`Could not open browser automatically. Open this URL manually: ${checkoutUrl}`);
   }
@@ -486,12 +503,16 @@ async function runFiatTopupFlow(options) {
 async function waitForWalletBalanceUpdate(setupArgs, options = {}) {
   const timeoutSec = Number(process.env.AUTOROUTER_TOPUP_TIMEOUT_SEC ?? 180);
   const pollMs = Number(process.env.AUTOROUTER_TOPUP_POLL_MS ?? 3000);
+  const requireMainnetBalance = process.env.AUTOROUTER_REQUIRE_MAINNET_BALANCE !== "0";
   const timeoutMs = Math.max(1000, timeoutSec * 1000);
   const start = Date.now();
 
   while (Date.now() - start < timeoutMs) {
     const current = await accountView(setupArgs);
-    if (hasPositiveBalance(current.stdout)) {
+    const funded = requireMainnetBalance
+      ? hasPositiveMainnetUsdBalance(current.stdout)
+      : hasPositiveBalance(current.stdout);
+    if (funded) {
       return current.stdout;
     }
     await sleep(Math.max(500, pollMs));
@@ -597,7 +618,10 @@ async function runOneCommand(args) {
 
   if (paymentMode === "mpp") {
     const balanceView = await accountView(setupArgs);
-    const walletHasBalance = hasPositiveBalance(balanceView.stdout);
+    const requireMainnetBalance = process.env.AUTOROUTER_REQUIRE_MAINNET_BALANCE !== "0";
+    const walletHasBalance = requireMainnetBalance
+      ? hasPositiveMainnetUsdBalance(balanceView.stdout)
+      : hasPositiveBalance(balanceView.stdout);
     if (options.forceTopup || !walletHasBalance) {
       await runFiatTopupFlow(options);
       const balanceAfter = await waitForWalletBalanceUpdate(setupArgs);
