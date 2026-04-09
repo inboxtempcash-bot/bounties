@@ -39,7 +39,7 @@ function printHelp() {
 
 Usage:
   autorouter run --type text|audio|video --auto "prompt" [--mode balanced|cheapest|fastest|best-quality] [--payment simulated|x402|mpp] [--pricing live|static] [--source core|mpp|all] [--model key-or-id] [--seconds n]
-  autorouter one --type text|audio|video --auto "prompt" [--source core|mpp|all] [--mode balanced|cheapest|fastest|best-quality] [--pricing live|static] [--real-pay] [--seconds n] [--yes] [--force-topup]
+  autorouter one --type text|audio|video --auto "prompt" [--source core|mpp|all] [--mode balanced|cheapest|fastest|best-quality] [--pricing live|static] [--payment simulated|x402|mpp] [--real-pay] [--seconds n] [--yes] [--force-topup]
   autorouter models list [--type text|audio|video] [--mode balanced|cheapest|fastest|best-quality] [--pricing live|static] [--source core|mpp|all] [--auto "sample prompt"] [--seconds n]
   autorouter text --auto "prompt" [--mode ...] [--payment ...] [--pricing ...]
   autorouter audio --auto "prompt" [--mode ...] [--payment ...] [--pricing ...] [--seconds n]
@@ -79,6 +79,7 @@ function parseOptions(args, defaults = {}) {
       i += 1;
     } else if (token === "--payment") {
       options.payment = args[i + 1] ?? options.payment;
+      options.paymentExplicit = true;
       i += 1;
     } else if (token === "--pricing") {
       options.pricing = args[i + 1] ?? options.pricing;
@@ -543,7 +544,7 @@ async function runOneCommand(args) {
     source: "mpp",
     pricing: "live",
     mode: "balanced",
-    payment: "simulated"
+    payment: undefined
   });
 
   validateMode(options.mode);
@@ -555,7 +556,15 @@ async function runOneCommand(args) {
     throw new Error("Missing --auto \"prompt\".");
   }
 
-  const paymentMode = options.realPay ? "mpp" : "simulated";
+  if (options.paymentExplicit) {
+    validatePayment(options.payment);
+  }
+
+  const paymentMode = options.paymentExplicit
+    ? options.payment
+    : (options.realPay
+      ? "mpp"
+      : ((options.source === "mpp" || options.source === "all") ? "mpp" : "simulated"));
   const setupArgs = baseMppArgs(args, TESTNET_RPC_URL);
   const task = buildTask(options.type, options, true);
   const plannedProviders = await resolveProvidersBySource({
