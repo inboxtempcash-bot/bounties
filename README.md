@@ -1,0 +1,110 @@
+# AutoRouter MVP
+
+Derived bidding router that evaluates provider bids, chooses a winner, executes the task, and logs results.
+
+Supports modalities:
+- `text`
+- `audio`
+- `video`
+
+Provider sources:
+- `core`: built-in model catalog (default)
+- `mpp`: live service catalog from `https://mpp.dev/api/services`
+- `all`: combine `core` + `mpp`
+
+One-command mode:
+- `one` auto-creates MPP account, attempts testnet funding, then routes with cheapest pricing.
+- With `--real-pay`, if wallet is empty it prompts top-up and opens Stripe Checkout URL automatically.
+
+Pricing modes:
+- `live` (default): fetches current pricing from OpenRouter `/api/v1/models`
+- `static`: uses adapter fallback prices
+
+Payment modes:
+- `simulated`
+- `x402` (placeholder flow)
+- `mpp` (real `mppx` payment request)
+
+## Install
+
+From npm (recommended for users):
+
+```bash
+npm i -g autorouter-cli
+```
+
+From source (local development):
+
+```bash
+npm install
+npm link
+```
+
+## Quick start
+
+One command end-to-end:
+
+```bash
+autorouter one --type video --source mpp --auto "make a 6 second teaser" --seconds 6
+```
+
+Real payment with one command:
+
+```bash
+autorouter one --type video --source mpp --auto "make a 6 second teaser" --seconds 6 --real-pay
+```
+
+First-time user real-pay flow:
+1. CLI previews APIs found for request and auto-selects best-value option (price + rating).
+2. CLI says how to list/select alternatives.
+3. If wallet is empty, CLI prompts top-up and opens Stripe Checkout.
+4. If no checkout URL is configured yet, CLI asks once for your Stripe Checkout URL and saves it to `~/.autorouter/config.json`.
+5. After checkout, CLI waits for wallet balance update and then continues request execution.
+
+Optional explicit setup:
+
+```bash
+autorouter mpp setup --skills project
+```
+
+This creates/uses an `mppx` account and syncs skills into local agent folders (`.agents/`, `.claude/`, `.codex/`).
+
+## Commands
+
+- `autorouter models list [--type text|audio|video] [--mode balanced|cheapest|fastest|best-quality] [--pricing live|static] [--source core|mpp|all] [--auto "sample prompt"] [--seconds n]`
+- `autorouter one --type text|audio|video --auto "prompt" [--source core|mpp|all] [--mode balanced|cheapest|fastest|best-quality] [--pricing live|static] [--real-pay] [--seconds n]`
+- `autorouter run --type text|audio|video --auto "prompt" [--mode balanced|cheapest|fastest|best-quality] [--payment simulated|x402|mpp] [--pricing live|static] [--source core|mpp|all] [--model key-or-id] [--seconds n]`
+- `autorouter text --auto "prompt" ...` (alias for `run --type text`)
+- `autorouter audio --auto "prompt" ...` (alias for `run --type audio`)
+- `autorouter video --auto "prompt" ...` (alias for `run --type video`)
+- `autorouter mpp setup [--account name] [--rpc-url url] [--skills project|global|skip]`
+- `autorouter mpp fund [--account name] [--rpc-url https://rpc.moderato.tempo.xyz]`
+- `autorouter mpp balance [--account name] [--rpc-url url]`
+
+Optional model-id overrides for live pricing:
+- `OPENROUTER_MODEL_TEXT_OPENAI`
+- `OPENROUTER_MODEL_TEXT_ANTHROPIC`
+- `OPENROUTER_MODEL_TEXT_CHEAP`
+
+MPP configuration:
+- `AUTOROUTER_MPP_ACCOUNT`
+- `AUTOROUTER_MPP_RPC_URL` (defaults to Tempo testnet RPC)
+- `AUTOROUTER_MPP_CHARGE_URL` (defaults to `https://mpp.dev/api/ping/paid` for payment smoke tests)
+- `AUTOROUTER_MPP_CHARGE_URL_<PROVIDER_NAME>` (provider name uppercased, non-alphanumeric replaced with `_`)
+- `AUTOROUTER_MPP_METHOD_OPTS` (comma-separated `key=value` pairs, passed to `mppx --method-opt`)
+- `AUTOROUTER_MPP_AUTO_CREATE_ACCOUNT` (`1` by default)
+- `AUTOROUTER_MPP_AUTO_FUND_TESTNET` (`1` by default)
+- `AUTOROUTER_STRIPE_CHECKOUT_URL` (optional override; otherwise CLI uses saved value from `~/.autorouter/config.json`)
+
+Execution configuration:
+- `OPENROUTER_API_KEY` enables real model completions from selected provider model IDs.
+- Without `OPENROUTER_API_KEY`, adapters return deterministic mock text for demo use.
+
+MPP catalog notes:
+- `--source mpp` derives live per-request prices from `mpp.dev` service discovery endpoint data.
+- For multi-endpoint services, pricing uses the lowest matching paid endpoint per modality (falls back to lowest paid endpoint).
+- For one-command onboarding: use `--yes` to auto-accept top-up prompts; use `--force-topup` to test checkout-open flow.
+
+## Ledger
+
+Each run appends a JSON line to `.context/ledger/requests.jsonl` with bids, selected provider, payment mode, and output.
