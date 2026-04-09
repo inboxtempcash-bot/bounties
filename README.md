@@ -36,6 +36,12 @@ Run globally from any terminal right now (no install):
 npx -y github:inboxtempcash-bot/bounties --help
 ```
 
+Tweetable agent one-liner (Tempo-style):
+
+```bash
+claude "Read https://raw.githubusercontent.com/inboxtempcash-bot/bounties/main/SKILL.md and use it to run: build me a 6 second teaser video about why you should join alliance"
+```
+
 Permanent global install from npm (after publish):
 
 ```bash
