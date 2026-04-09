@@ -107,7 +107,7 @@ export async function handleMppPayment({ amountUsd, requestId, providerName }) {
 
   return {
     protocol: "mpp",
-    summary: `mppx payment success (${status}${reference ? `, receipt ${reference.slice(0, 14)}...` : ""}${challengeAmount ? `, challenge ${challengeAmount}` : ""}; routed estimate ${formatMoney(amountUsd)} USD${usingDemoEndpoint ? ", demo endpoint" : ""})`,
+    summary: `mppx payment success (${status}${reference ? `, receipt ${reference.slice(0, 14)}...` : ""}${challengeAmount ? `, challenge ${challengeAmount}` : ""}; routed estimate ${formatMoney(amountUsd)} USD${usingDemoEndpoint ? ", demo endpoint (payment smoke test)" : ""})`,
     receiptReference: reference,
     chargeUrl,
     rpcUrl: baseArgs.rpcUrl

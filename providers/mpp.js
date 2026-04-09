@@ -60,7 +60,9 @@ function endpointMatchesModality(endpoint, modality) {
     .toLowerCase();
 
   if (modality === "video") {
-    return /\b(video|veo|sora|movie|clip)\b/.test(text);
+    const hasVideoTerm = /\b(video|veo|sora|movie|clip|animation|animate)\b/.test(text);
+    const hasGenerationIntent = /\b(generate|generation|create|render|synthes|produce|convert|transform|edit)\b/.test(text);
+    return hasVideoTerm && hasGenerationIntent;
   }
 
   if (modality === "audio") {
@@ -73,8 +75,19 @@ function endpointMatchesModality(endpoint, modality) {
 function minRequestPriceUsd(service, modality) {
   const prices = [];
   const fallbackPrices = [];
+  let hasDynamicMatch = false;
 
   for (const endpoint of service.endpoints ?? []) {
+    const payment = endpoint?.payment;
+    if (!payment) {
+      continue;
+    }
+
+    const matches = endpointMatchesModality(endpoint, modality);
+    if (matches && payment.dynamic === true) {
+      hasDynamicMatch = true;
+    }
+
     const amount = toNumber(endpoint?.payment?.amount);
     const decimals = toNumber(endpoint?.payment?.decimals);
     if (amount === null || decimals === null || amount <= 0 || decimals < 0) {
@@ -87,7 +100,7 @@ function minRequestPriceUsd(service, modality) {
     }
 
     fallbackPrices.push(usd);
-    if (endpointMatchesModality(endpoint, modality)) {
+    if (matches) {
       prices.push(usd);
     }
   }
@@ -96,11 +109,15 @@ function minRequestPriceUsd(service, modality) {
     return Math.min(...prices);
   }
 
-  if (fallbackPrices.length === 0) {
-    return null;
+  // Dynamic-priced endpoints often omit fixed amount fields; use lowest fixed
+  // endpoint price only when the modality has a matching dynamic endpoint.
+  if (hasDynamicMatch && fallbackPrices.length > 0) {
+    return Math.min(...fallbackPrices);
   }
 
-  return Math.min(...fallbackPrices);
+  if (fallbackPrices.length === 0 || !hasDynamicMatch) {
+    return null;
+  }
 }
 
 function classifyModalities(service) {
@@ -119,28 +136,40 @@ function classifyModalities(service) {
 
   const modalities = new Set();
 
-  if (/\b(video|veo|sora|runway|pika|luma|movie|clip)\b/.test(text)) {
-    modalities.add("video");
-  }
+  const endpointCatalog = service.endpoints ?? [];
+  if (endpointCatalog.length > 0) {
+    let textMatch = false;
+    let audioMatch = false;
+    let videoMatch = false;
+    for (const endpoint of endpointCatalog) {
+      if (!endpoint?.payment) {
+        continue;
+      }
+      textMatch ||= endpointMatchesModality(endpoint, "text");
+      audioMatch ||= endpointMatchesModality(endpoint, "audio");
+      videoMatch ||= endpointMatchesModality(endpoint, "video");
+    }
 
-  if (/\b(audio|speech|voice|transcrib|tts|podcast|phone|whisper)\b/.test(text)) {
-    modalities.add("audio");
-  }
-
-  if (/\b(chat|text|completion|llm|model|prompt|reason|claude|gpt|gemini|openai|anthropic|openrouter)\b/.test(text)) {
-    modalities.add("text");
-  }
-
-  if (categories.includes("ai")) {
-    modalities.add("text");
-  }
-
-  if (categories.includes("media")) {
-    if (!modalities.has("audio")) {
+    if (textMatch) {
+      modalities.add("text");
+    }
+    if (audioMatch) {
       modalities.add("audio");
     }
-    if (!modalities.has("video")) {
+    if (videoMatch) {
       modalities.add("video");
+    }
+  } else {
+    if (/\b(video|veo|sora|runway|pika|luma|movie|clip)\b/.test(text)) {
+      modalities.add("video");
+    }
+
+    if (/\b(audio|speech|voice|transcrib|tts|podcast|phone|whisper)\b/.test(text)) {
+      modalities.add("audio");
+    }
+
+    if (/\b(chat|text|completion|llm|model|prompt|reason|claude|gpt|gemini|openai|anthropic|openrouter)\b/.test(text) || categories.includes("ai")) {
+      modalities.add("text");
     }
   }
 
@@ -161,6 +190,24 @@ function matchesModel(provider, selection) {
   ]
     .filter(Boolean)
     .some((value) => String(value).toLowerCase() === needle);
+}
+
+function isAiVideoService(service) {
+  const categories = (service.categories ?? []).map((item) => String(item).toLowerCase());
+  const tags = (service.tags ?? []).map((item) => String(item).toLowerCase());
+  const text = [
+    service.id,
+    service.name,
+    service.description,
+    tags.join(" ")
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const aiSignal = categories.includes("ai") || /\b(ai|model|inference|generation|generative|diffusion|llm)\b/.test(text);
+  const videoSignal = /\b(video|veo|sora|runway|pika|luma|animate|render|fal|replicate|stability)\b/.test(text);
+  return aiSignal && videoSignal;
 }
 
 function buildProvider(service, modality, minPriceUsd) {
@@ -204,7 +251,7 @@ function buildProvider(service, modality, minPriceUsd) {
         usage,
         execute: async (nextTask) => {
           return {
-            text: `${this.modality.toUpperCase()} request selected ${this.providerName} (${this.serviceUrl}) for prompt "${nextTask.prompt}"`,
+            text: `${this.modality.toUpperCase()} route selected ${this.providerName} (${this.serviceUrl}) for prompt "${nextTask.prompt}". No file artifact is produced by this CLI adapter yet.`,
             source: "mpp-service",
             model: this.modelKey,
             serviceUrl: this.serviceUrl
@@ -226,6 +273,9 @@ export function buildMppServiceProviders(services, { modality, model } = {}) {
     const modalities = classifyModalities(service);
     for (const nextModality of modalities) {
       if (modality && nextModality !== modality) {
+        continue;
+      }
+      if (nextModality === "video" && !isAiVideoService(service)) {
         continue;
       }
       const minPriceUsd = minRequestPriceUsd(service, nextModality);
