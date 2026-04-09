@@ -12,6 +12,7 @@ npx -y github:inboxtempcash-bot/bounties#main one --type video --source mpp --au
 
 ## Payment and top-up behavior
 
+- Preferred production mode: direct wallet top-up (no treasury inventory).
 - If wallet has balance, continue.
 - If wallet is empty, open top-up and wait for balance update.
 - CLI uses Stripe checkout only if configured.

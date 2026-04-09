@@ -562,7 +562,7 @@ async function resolveCheckoutUrl(_options, context = {}) {
 
   const fallbackUrl = buildTempoTopupUrl(walletAddress);
   console.log(
-    `No Stripe checkout configured. Falling back to Tempo hosted top-up for wallet ${walletAddress ?? "(unknown address)"}: ${fallbackUrl}`
+    `Using direct Tempo wallet top-up for ${walletAddress ?? "(unknown address)"}: ${fallbackUrl}`
   );
   return fallbackUrl;
 }
@@ -572,7 +572,7 @@ async function runFiatTopupFlow(options, context = {}) {
 
   const shouldOpen = options.yes
     ? true
-    : await confirmYes("Wallet is empty. Open Stripe Checkout to top up now? [Y/n] ", true);
+    : await confirmYes("Wallet is empty. Open funding page to top up now? [Y/n] ", true);
 
   if (!shouldOpen) {
     throw new Error("Payment required. Re-run with --yes or fund wallet manually.");
@@ -741,7 +741,7 @@ async function runOneCommand(args) {
         } else {
           if (options.realUsd && !checkoutConfigured) {
             console.log(
-              `No Stripe checkout configured. Opening Tempo hosted wallet funding flow on mainnet for ${accountAddress ?? "(unknown address)"} instead.`
+              `Direct wallet top-up mode: opening Tempo hosted mainnet funding flow for ${accountAddress ?? "(unknown address)"}.`
             );
           }
           await runFiatTopupFlow(options, { walletAddress: accountAddress });

@@ -16,6 +16,7 @@ One-command mode:
 - `one` auto-creates MPP account and routes with cheapest pricing.
 - For `--source mpp` or `--source all`, `one` uses real MPP payments by default.
 - If wallet has no mainnet PathUSD/USDC balance, it prompts top-up and opens a funding URL automatically.
+- Default production onboarding is direct wallet top-up (user funds their own Tempo wallet; no treasury USDC inventory required).
 - If Stripe checkout is configured (URL or API), CLI uses that.
 - Testnet faucet fallback is disabled by default. Enable it only for demos with `AUTOROUTER_ENABLE_TESTNET_FAUCET_FALLBACK=1`.
 - Use `--real-usd` to force mainnet for real USD funding. If Stripe checkout is not configured, CLI falls back to Tempo hosted wallet funding page.
