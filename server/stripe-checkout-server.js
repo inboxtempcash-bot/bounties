@@ -4,12 +4,18 @@ import { appendFile, mkdir } from "node:fs/promises";
 import http from "node:http";
 import { join } from "node:path";
 import process from "node:process";
+import { createPublicClient, createWalletClient, http as viemHttp, isAddress, parseAbi } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || "0.0.0.0";
 const STRIPE_API_BASE = "https://api.stripe.com/v1";
 const LOG_DIR = join(process.cwd(), ".context", "stripe");
 const LOG_FILE = join(LOG_DIR, "events.jsonl");
+const ERC20_ABI = parseAbi([
+  "function transfer(address to, uint256 amount) returns (bool)"
+]);
+const processedStripeEventIds = new Set();
 
 function json(res, statusCode, payload) {
   res.writeHead(statusCode, {
@@ -80,6 +86,14 @@ function getEnv(name, fallback = undefined) {
   return fallback;
 }
 
+function getBooleanEnv(name, fallback = false) {
+  const value = getEnv(name);
+  if (!value) {
+    return fallback;
+  }
+  return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
+}
+
 function requireEnv(name) {
   const value = getEnv(name);
   if (!value) {
@@ -90,6 +104,26 @@ function requireEnv(name) {
 
 function looksLikeAddress(value) {
   return typeof value === "string" && /^0x[a-fA-F0-9]{40}$/.test(value.trim());
+}
+
+function toBigIntOrNull(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  try {
+    if (typeof value === "bigint") {
+      return value;
+    }
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return BigInt(Math.trunc(value));
+    }
+    if (typeof value === "string" && value.trim()) {
+      return BigInt(value.trim());
+    }
+    return null;
+  } catch (_error) {
+    return null;
+  }
 }
 
 function toStripeAmountCents(body) {
@@ -110,6 +144,25 @@ function applyTemplate(template, context) {
     .replaceAll("{address}", encodeURIComponent(context.walletAddress))
     .replaceAll("{address_raw}", context.walletAddress)
     .replaceAll("{session_id}", "{CHECKOUT_SESSION_ID}");
+}
+
+function centsToTokenUnits(amountTotalCents, decimals) {
+  const cents = toBigIntOrNull(amountTotalCents);
+  if (cents === null || cents <= 0n) {
+    throw new Error("amount_total must be a positive integer cents value.");
+  }
+
+  const dec = Number(decimals);
+  if (!Number.isFinite(dec) || dec < 0 || dec > 36) {
+    throw new Error("Invalid token decimals configuration.");
+  }
+
+  if (dec >= 2) {
+    return cents * (10n ** BigInt(dec - 2));
+  }
+
+  const divisor = 10n ** BigInt(2 - dec);
+  return cents / divisor;
 }
 
 function encodeForm(params) {
@@ -240,6 +293,100 @@ async function forwardSettlementEvent(event) {
   }
 }
 
+function buildSettlementChain() {
+  const chainId = Number(getEnv("AUTOROUTER_SETTLEMENT_CHAIN_ID", "4217"));
+  if (!Number.isFinite(chainId) || chainId <= 0) {
+    throw new Error("AUTOROUTER_SETTLEMENT_CHAIN_ID must be a positive integer.");
+  }
+
+  const chainName = getEnv("AUTOROUTER_SETTLEMENT_CHAIN_NAME", "Tempo");
+  const nativeSymbol = getEnv("AUTOROUTER_SETTLEMENT_NATIVE_SYMBOL", "TEMPO");
+  const rpcUrl = requireEnv("AUTOROUTER_SETTLEMENT_RPC_URL");
+
+  return {
+    id: chainId,
+    name: chainName,
+    network: chainName.toLowerCase().replaceAll(/\s+/g, "-"),
+    nativeCurrency: {
+      name: nativeSymbol,
+      symbol: nativeSymbol,
+      decimals: 18
+    },
+    rpcUrls: {
+      default: {
+        http: [rpcUrl]
+      },
+      public: {
+        http: [rpcUrl]
+      }
+    }
+  };
+}
+
+async function settleTopupOnchain({ walletAddress, amountTotalCents, sessionId }) {
+  const mode = getEnv("AUTOROUTER_SETTLEMENT_MODE");
+  if (mode !== "erc20_transfer") {
+    return null;
+  }
+
+  if (!isAddress(walletAddress)) {
+    throw new Error("Invalid wallet address for settlement.");
+  }
+
+  const tokenAddress = requireEnv("AUTOROUTER_SETTLEMENT_TOKEN_ADDRESS");
+  if (!isAddress(tokenAddress)) {
+    throw new Error("AUTOROUTER_SETTLEMENT_TOKEN_ADDRESS must be a valid address.");
+  }
+
+  const decimals = Number(getEnv("AUTOROUTER_SETTLEMENT_TOKEN_DECIMALS", "6"));
+  const amount = centsToTokenUnits(amountTotalCents, decimals);
+  if (amount <= 0n) {
+    throw new Error("Settlement amount resolved to zero.");
+  }
+
+  const privateKey = requireEnv("AUTOROUTER_SETTLEMENT_PRIVATE_KEY");
+  const account = privateKeyToAccount(privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`);
+  const chain = buildSettlementChain();
+
+  const walletClient = createWalletClient({
+    account,
+    chain,
+    transport: viemHttp(chain.rpcUrls.default.http[0])
+  });
+  const publicClient = createPublicClient({
+    chain,
+    transport: viemHttp(chain.rpcUrls.default.http[0])
+  });
+
+  const hash = await walletClient.writeContract({
+    address: tokenAddress,
+    abi: ERC20_ABI,
+    functionName: "transfer",
+    args: [walletAddress, amount],
+    account
+  });
+
+  const confirmations = Number(getEnv("AUTOROUTER_SETTLEMENT_CONFIRMATIONS", "1"));
+  const skipWait = getBooleanEnv("AUTOROUTER_SETTLEMENT_SKIP_WAIT", false);
+  let receipt = null;
+  if (!skipWait) {
+    receipt = await publicClient.waitForTransactionReceipt({
+      hash,
+      confirmations: Math.max(1, confirmations)
+    });
+  }
+
+  return {
+    mode,
+    sessionId,
+    tokenAddress,
+    tokenDecimals: decimals,
+    amount: amount.toString(),
+    txHash: hash,
+    receiptStatus: receipt?.status ?? null
+  };
+}
+
 async function handleCreateCheckout(req, res, rawBody) {
   if (!isAuthorizedRequest(req)) {
     unauthorized(res);
@@ -309,6 +456,11 @@ async function handleStripeWebhook(req, res, rawBody) {
   }
 
   try {
+    if (event.id && processedStripeEventIds.has(event.id)) {
+      json(res, 200, { ok: true, duplicate: true });
+      return;
+    }
+
     await logEvent({
       type: event.type,
       at: new Date().toISOString(),
@@ -328,10 +480,21 @@ async function handleStripeWebhook(req, res, rawBody) {
         amountTotal: session.amount_total,
         currency: session.currency
       };
+      const settlementTx = await settleTopupOnchain({
+        walletAddress,
+        amountTotalCents: session.amount_total,
+        sessionId: session.id
+      });
+      if (settlementTx) {
+        settlementEvent.settlement = settlementTx;
+      }
       await logEvent(settlementEvent);
       await forwardSettlementEvent(settlementEvent);
     }
 
+    if (event.id) {
+      processedStripeEventIds.add(event.id);
+    }
     json(res, 200, { ok: true });
   } catch (error) {
     internalError(res, error.message);

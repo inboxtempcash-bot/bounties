@@ -8,7 +8,7 @@ It is intended for AutoRouter's CLI top-up flow:
 - Server returns `{ checkoutUrl }`
 - User pays in Stripe
 - Stripe calls `/api/stripe/webhook`
-- Your settlement hook credits the requested wallet on-chain
+- Webhook can transfer USDC/PathUSD on-chain directly (or forward to your own settlement hook)
 
 ## 1) Configure env vars
 
@@ -34,6 +34,15 @@ export AUTOROUTER_TOPUP_SETTLEMENT_TOKEN="your-internal-token"
 
 # Optional: protect /api/stripe/checkout with bearer auth
 export AUTOROUTER_CHECKOUT_SERVER_TOKEN="your-server-token"
+
+# Optional built-in on-chain settlement (recommended for full automation)
+export AUTOROUTER_SETTLEMENT_MODE="erc20_transfer"
+export AUTOROUTER_SETTLEMENT_RPC_URL="https://rpc.presto.tempo.xyz"
+export AUTOROUTER_SETTLEMENT_CHAIN_ID="4217"
+export AUTOROUTER_SETTLEMENT_PRIVATE_KEY="0x..."
+export AUTOROUTER_SETTLEMENT_TOKEN_ADDRESS="0x..."   # USDC/PathUSD token on this chain
+export AUTOROUTER_SETTLEMENT_TOKEN_DECIMALS="6"
+export AUTOROUTER_SETTLEMENT_CONFIRMATIONS="1"
 ```
 
 ## 2) Run server
@@ -99,3 +108,5 @@ On `checkout.session.completed`, logs event and forwards:
 ```
 
 to `AUTOROUTER_TOPUP_SETTLEMENT_URL` if configured.
+
+If `AUTOROUTER_SETTLEMENT_MODE=erc20_transfer` is set, webhook also performs direct ERC-20 transfer from treasury wallet to the user's wallet address.
