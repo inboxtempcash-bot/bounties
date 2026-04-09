@@ -14,7 +14,9 @@ Provider sources:
 
 One-command mode:
 - `one` auto-creates MPP account, attempts testnet funding, then routes with cheapest pricing.
-- With `--real-pay`, if wallet is empty it prompts top-up and opens Stripe Checkout URL automatically.
+- For `--source mpp` or `--source all`, `one` uses real MPP payments by default.
+- If wallet is empty, it prompts top-up and opens Stripe Checkout URL automatically.
+- Use `--payment simulated` for dry-run/demo mode.
 
 Pricing modes:
 - `live` (default): fetches current pricing from OpenRouter `/api/v1/models`
@@ -63,7 +65,7 @@ autorouter one --type video --source mpp --auto "make a 6 second teaser" --secon
 Real payment with one command:
 
 ```bash
-autorouter one --type video --source mpp --auto "make a 6 second teaser" --seconds 6 --real-pay
+autorouter one --type video --source mpp --auto "make a 6 second teaser" --seconds 6
 ```
 
 First-time user real-pay flow:
@@ -84,7 +86,7 @@ This creates/uses an `mppx` account and syncs skills into local agent folders (`
 ## Commands
 
 - `autorouter models list [--type text|audio|video] [--mode balanced|cheapest|fastest|best-quality] [--pricing live|static] [--source core|mpp|all] [--auto "sample prompt"] [--seconds n]`
-- `autorouter one --type text|audio|video --auto "prompt" [--source core|mpp|all] [--mode balanced|cheapest|fastest|best-quality] [--pricing live|static] [--real-pay] [--seconds n]`
+- `autorouter one --type text|audio|video --auto "prompt" [--source core|mpp|all] [--mode balanced|cheapest|fastest|best-quality] [--pricing live|static] [--payment simulated|x402|mpp] [--real-pay] [--seconds n]`
 - `autorouter run --type text|audio|video --auto "prompt" [--mode balanced|cheapest|fastest|best-quality] [--payment simulated|x402|mpp] [--pricing live|static] [--source core|mpp|all] [--model key-or-id] [--seconds n]`
 - `autorouter text --auto "prompt" ...` (alias for `run --type text`)
 - `autorouter audio --auto "prompt" ...` (alias for `run --type audio`)
