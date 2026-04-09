@@ -118,6 +118,7 @@ MPP catalog notes:
 - `--source mpp` derives live per-request prices from `mpp.dev` service discovery endpoint data.
 - For multi-endpoint services, pricing uses the lowest matching paid endpoint per modality (falls back to lowest paid endpoint).
 - For one-command onboarding: use `--yes` to auto-accept top-up prompts; use `--force-topup` to test checkout-open flow.
+- Current adapter scope: MPP providers execute as routed payment + selection stubs for audio/video, and do not yet write media files or provide a `download` command.
 
 ## Ledger
 
