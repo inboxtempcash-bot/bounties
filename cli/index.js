@@ -126,6 +126,11 @@ function formatMoney(value) {
   return `$${value.toFixed(8)}`;
 }
 
+function extractAccountAddress(accountViewOutput) {
+  const match = accountViewOutput.match(/Address\s+([0-9a-zA-Z]+)/);
+  return match?.[1] ?? null;
+}
+
 function validateMode(mode) {
   if (!ROUTE_MODES.has(mode)) {
     throw new Error(`Invalid --mode '${mode}'. Use balanced, cheapest, fastest, or best-quality.`);
@@ -618,11 +623,15 @@ async function runOneCommand(args) {
 
   if (paymentMode === "mpp") {
     const balanceView = await accountView(setupArgs);
+    const accountAddress = extractAccountAddress(balanceView.stdout);
     const requireMainnetBalance = process.env.AUTOROUTER_REQUIRE_MAINNET_BALANCE !== "0";
     const walletHasBalance = requireMainnetBalance
       ? hasPositiveMainnetUsdBalance(balanceView.stdout)
       : hasPositiveBalance(balanceView.stdout);
     if (options.forceTopup || !walletHasBalance) {
+      if (accountAddress) {
+        console.log(`Fund this MPP wallet address: ${accountAddress}`);
+      }
       await runFiatTopupFlow(options);
       const balanceAfter = await waitForWalletBalanceUpdate(setupArgs);
       if (balanceAfter) {
