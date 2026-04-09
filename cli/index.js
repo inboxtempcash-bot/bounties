@@ -41,7 +41,7 @@ function printHelp() {
 
 Usage:
   autorouter run --type text|audio|video --auto "prompt" [--mode balanced|cheapest|fastest|best-quality] [--payment simulated|x402|mpp] [--pricing live|static] [--source core|mpp|all] [--model key-or-id] [--seconds n]
-  autorouter one --type text|audio|video --auto "prompt" [--source core|mpp|all] [--mode balanced|cheapest|fastest|best-quality] [--pricing live|static] [--payment simulated|x402|mpp] [--real-pay] [--real-usd] [--seconds n] [--yes] [--force-topup]
+  autorouter one --type text|audio|video --auto "prompt" [--source core|mpp|all] [--mode balanced|cheapest|fastest|best-quality] [--pricing live|static] [--payment simulated|x402|mpp] [--real-pay] [--real-usd] [--checkout-url https://...] [--seconds n] [--yes] [--force-topup]
   autorouter models list [--type text|audio|video] [--mode balanced|cheapest|fastest|best-quality] [--pricing live|static] [--source core|mpp|all] [--auto "sample prompt"] [--seconds n]
   autorouter text --auto "prompt" [--mode ...] [--payment ...] [--pricing ...]
   autorouter audio --auto "prompt" [--mode ...] [--payment ...] [--pricing ...] [--seconds n]
@@ -102,6 +102,9 @@ function parseOptions(args, defaults = {}) {
       options.realPay = true;
     } else if (token === "--real-usd") {
       options.realUsd = true;
+    } else if (token === "--checkout-url") {
+      options.checkoutUrl = args[i + 1] ?? options.checkoutUrl;
+      i += 1;
     } else if (token === "--skip-setup") {
       options.skipSetup = true;
     } else if (token === "--skip-fund") {
@@ -667,109 +670,117 @@ async function runOneCommand(args) {
   if (options.paymentExplicit) {
     validatePayment(options.payment);
   }
-
-  const paymentMode = options.paymentExplicit
-    ? options.payment
-    : (options.realPay
-      ? "mpp"
-      : ((options.source === "mpp" || options.source === "all") ? "mpp" : "simulated"));
-  const defaultRpc = options.realUsd ? MAINNET_RPC_URL : TESTNET_RPC_URL;
-  const setupArgs = baseMppArgs(args, defaultRpc);
-  const task = buildTask(options.type, options, true);
-  const plannedProviders = await resolveProvidersBySource({
-    modality: options.type,
-    model: options.model,
-    source: options.source
-  });
-
-  if (plannedProviders.length === 0) {
-    throw new Error(`No models found for --type ${options.type}${options.model ? ` and --model ${options.model}` : ""}.`);
+  if (options.checkoutUrl && !looksLikeHttpUrl(options.checkoutUrl)) {
+    throw new Error("Invalid --checkout-url. Please provide a full https:// URL.");
   }
 
-  await previewPlan({
-    options,
-    providers: plannedProviders,
-    task
-  });
-
-  if (!options.skipSetup) {
-    await ensureAccount(setupArgs);
-  }
-
-  if (paymentMode !== "mpp" && !options.skipFund && setupArgs.rpcUrl === TESTNET_RPC_URL) {
-    try {
-      await runMppx(["account", "fund", ...buildMppxArgs(setupArgs)]);
-    } catch (_error) {
-      // Funding can fail on faucet limits; routing can still proceed.
-    }
-  }
-
-  if (paymentMode === "mpp") {
-    if (options.realUsd && setupArgs.rpcUrl === TESTNET_RPC_URL) {
-      throw new Error(`--real-usd requires mainnet RPC. Use --rpc-url ${MAINNET_RPC_URL} (or set AUTOROUTER_MPP_RPC_URL).`);
-    }
-
-    const balanceView = await accountView(setupArgs);
-    const accountAddress = extractAccountAddress(balanceView.stdout);
-    const checkoutConfigured = await hasConfiguredCheckout();
-    const allowTestnetFaucet =
-      process.env.AUTOROUTER_ENABLE_TESTNET_FAUCET_FALLBACK === "1" && !options.realUsd;
-    const preferTestnetFaucet = !checkoutConfigured && allowTestnetFaucet && setupArgs.rpcUrl === TESTNET_RPC_URL;
-    const requireMainnetBalance = preferTestnetFaucet
-      ? false
-      : (process.env.AUTOROUTER_REQUIRE_MAINNET_BALANCE !== "0");
-    const walletHasBalance = requireMainnetBalance
-      ? hasPositiveMainnetUsdBalance(balanceView.stdout)
-      : hasPositiveBalance(balanceView.stdout);
-    if (options.forceTopup || !walletHasBalance) {
-      if (accountAddress) {
-        console.log(`Fund this MPP wallet address: ${accountAddress}`);
-      }
-      if (options.realUsd && !checkoutConfigured) {
-        throw new Error(
-          `Real USD top-up requires Stripe checkout configuration. Set AUTOROUTER_STRIPE_CHECKOUT_URL (or AUTOROUTER_STRIPE_CHECKOUT_API_URL) to fund wallet ${accountAddress ?? "(unknown address)"} on ${MAINNET_RPC_URL}.`
-        );
-      }
-      if (preferTestnetFaucet) {
-        console.log(
-          "No Stripe checkout configured. Using Tempo testnet faucet funding (tempo_fundAddress) per docs."
-        );
-        await runMppx(["account", "fund", ...buildMppxArgs(setupArgs)]);
-      } else {
-        await runFiatTopupFlow(options, { walletAddress: accountAddress });
-      }
-      const balanceAfter = await waitForWalletBalanceUpdate(setupArgs, { requireMainnetBalance });
-      if (balanceAfter) {
-        console.log("Top-up detected. Wallet balance updated.");
-        console.log(balanceAfter);
-        console.log("");
-      }
-    }
-  }
-
-  const routedArgs = [
-    "--type", options.type,
-    "--auto", options.prompt,
-    "--source", options.source,
-    "--pricing", options.pricing,
-    "--mode", options.mode,
-    "--payment", paymentMode
-  ];
-
-  if (options.model) {
-    routedArgs.push("--model", options.model);
-  }
-  if (Number.isFinite(options.seconds) && options.seconds > 0) {
-    routedArgs.push("--seconds", String(options.seconds));
-  }
-
-  const restoreMppEnv = paymentMode === "mpp"
-    ? applyMppRuntimeEnv(setupArgs)
-    : () => {};
+  const restoreCheckoutEnv = applyCheckoutRuntimeEnv(options);
   try {
-    await runRouteCommand(routedArgs);
+    const paymentMode = options.paymentExplicit
+      ? options.payment
+      : (options.realPay
+        ? "mpp"
+        : ((options.source === "mpp" || options.source === "all") ? "mpp" : "simulated"));
+    const defaultRpc = options.realUsd ? MAINNET_RPC_URL : TESTNET_RPC_URL;
+    const setupArgs = baseMppArgs(args, defaultRpc);
+    const task = buildTask(options.type, options, true);
+    const plannedProviders = await resolveProvidersBySource({
+      modality: options.type,
+      model: options.model,
+      source: options.source
+    });
+
+    if (plannedProviders.length === 0) {
+      throw new Error(`No models found for --type ${options.type}${options.model ? ` and --model ${options.model}` : ""}.`);
+    }
+
+    await previewPlan({
+      options,
+      providers: plannedProviders,
+      task
+    });
+
+    if (!options.skipSetup) {
+      await ensureAccount(setupArgs);
+    }
+
+    if (paymentMode !== "mpp" && !options.skipFund && setupArgs.rpcUrl === TESTNET_RPC_URL) {
+      try {
+        await runMppx(["account", "fund", ...buildMppxArgs(setupArgs)]);
+      } catch (_error) {
+        // Funding can fail on faucet limits; routing can still proceed.
+      }
+    }
+
+    if (paymentMode === "mpp") {
+      if (options.realUsd && setupArgs.rpcUrl === TESTNET_RPC_URL) {
+        throw new Error(`--real-usd requires mainnet RPC. Use --rpc-url ${MAINNET_RPC_URL} (or set AUTOROUTER_MPP_RPC_URL).`);
+      }
+
+      const balanceView = await accountView(setupArgs);
+      const accountAddress = extractAccountAddress(balanceView.stdout);
+      const checkoutConfigured = await hasConfiguredCheckout();
+      const allowTestnetFaucet =
+        process.env.AUTOROUTER_ENABLE_TESTNET_FAUCET_FALLBACK === "1" && !options.realUsd;
+      const preferTestnetFaucet = !checkoutConfigured && allowTestnetFaucet && setupArgs.rpcUrl === TESTNET_RPC_URL;
+      const requireMainnetBalance = preferTestnetFaucet
+        ? false
+        : (process.env.AUTOROUTER_REQUIRE_MAINNET_BALANCE !== "0");
+      const walletHasBalance = requireMainnetBalance
+        ? hasPositiveMainnetUsdBalance(balanceView.stdout)
+        : hasPositiveBalance(balanceView.stdout);
+      if (options.forceTopup || !walletHasBalance) {
+        if (accountAddress) {
+          console.log(`Fund this MPP wallet address: ${accountAddress}`);
+        }
+        if (options.realUsd && !checkoutConfigured) {
+          throw new Error(
+            `Real USD top-up requires Stripe checkout configuration. Set AUTOROUTER_STRIPE_CHECKOUT_URL (or AUTOROUTER_STRIPE_CHECKOUT_API_URL) to fund wallet ${accountAddress ?? "(unknown address)"} on ${MAINNET_RPC_URL}.`
+          );
+        }
+        if (preferTestnetFaucet) {
+          console.log(
+            "No Stripe checkout configured. Using Tempo testnet faucet funding (tempo_fundAddress) per docs."
+          );
+          await runMppx(["account", "fund", ...buildMppxArgs(setupArgs)]);
+        } else {
+          await runFiatTopupFlow(options, { walletAddress: accountAddress });
+        }
+        const balanceAfter = await waitForWalletBalanceUpdate(setupArgs, { requireMainnetBalance });
+        if (balanceAfter) {
+          console.log("Top-up detected. Wallet balance updated.");
+          console.log(balanceAfter);
+          console.log("");
+        }
+      }
+    }
+
+    const routedArgs = [
+      "--type", options.type,
+      "--auto", options.prompt,
+      "--source", options.source,
+      "--pricing", options.pricing,
+      "--mode", options.mode,
+      "--payment", paymentMode
+    ];
+
+    if (options.model) {
+      routedArgs.push("--model", options.model);
+    }
+    if (Number.isFinite(options.seconds) && options.seconds > 0) {
+      routedArgs.push("--seconds", String(options.seconds));
+    }
+
+    const restoreMppEnv = paymentMode === "mpp"
+      ? applyMppRuntimeEnv(setupArgs)
+      : () => {};
+    try {
+      await runRouteCommand(routedArgs);
+    } finally {
+      restoreMppEnv();
+    }
   } finally {
-    restoreMppEnv();
+    restoreCheckoutEnv();
   }
 }
 
@@ -811,6 +822,24 @@ function applyMppRuntimeEnv(baseArgs = {}) {
       delete process.env.AUTOROUTER_MPP_RPC_URL;
     } else {
       process.env.AUTOROUTER_MPP_RPC_URL = previous.AUTOROUTER_MPP_RPC_URL;
+    }
+  };
+}
+
+function applyCheckoutRuntimeEnv(options = {}) {
+  const previous = {
+    AUTOROUTER_STRIPE_CHECKOUT_URL: process.env.AUTOROUTER_STRIPE_CHECKOUT_URL
+  };
+
+  if (looksLikeHttpUrl(options.checkoutUrl)) {
+    process.env.AUTOROUTER_STRIPE_CHECKOUT_URL = options.checkoutUrl.trim();
+  }
+
+  return () => {
+    if (previous.AUTOROUTER_STRIPE_CHECKOUT_URL === undefined) {
+      delete process.env.AUTOROUTER_STRIPE_CHECKOUT_URL;
+    } else {
+      process.env.AUTOROUTER_STRIPE_CHECKOUT_URL = previous.AUTOROUTER_STRIPE_CHECKOUT_URL;
     }
   };
 }

@@ -131,7 +131,7 @@ This creates/uses an `mppx` account and syncs skills into local agent folders (`
 ## Commands
 
 - `autorouter models list [--type text|audio|video] [--mode balanced|cheapest|fastest|best-quality] [--pricing live|static] [--source core|mpp|all] [--auto "sample prompt"] [--seconds n]`
-- `autorouter one --type text|audio|video --auto "prompt" [--source core|mpp|all] [--mode balanced|cheapest|fastest|best-quality] [--pricing live|static] [--payment simulated|x402|mpp] [--real-pay] [--real-usd] [--seconds n]`
+- `autorouter one --type text|audio|video --auto "prompt" [--source core|mpp|all] [--mode balanced|cheapest|fastest|best-quality] [--pricing live|static] [--payment simulated|x402|mpp] [--real-pay] [--real-usd] [--checkout-url https://...] [--seconds n]`
 - `autorouter run --type text|audio|video --auto "prompt" [--mode balanced|cheapest|fastest|best-quality] [--payment simulated|x402|mpp] [--pricing live|static] [--source core|mpp|all] [--model key-or-id] [--seconds n]`
 - `autorouter text --auto "prompt" ...` (alias for `run --type text`)
 - `autorouter audio --auto "prompt" ...` (alias for `run --type audio`)
