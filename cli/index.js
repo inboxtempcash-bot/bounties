@@ -441,30 +441,47 @@ function applyAddressTemplate(url, walletAddress) {
 }
 
 function buildTempoTopupUrl(walletAddress) {
-  const base = (process.env.AUTOROUTER_DEFAULT_TOPUP_URL || "https://wallet.tempo.xyz/embed/rpc/wallet_deposit").trim();
+  const base = (process.env.AUTOROUTER_DEFAULT_TOPUP_URL || "https://wallet.tempo.xyz/welcome").trim();
   const rawAmount = String(process.env.AUTOROUTER_DEFAULT_TOPUP_USD ?? "20").trim();
   const chainId = Number(process.env.AUTOROUTER_TEMPO_TOPUP_CHAIN_ID ?? 4217);
   const tokenAddress = process.env.AUTOROUTER_TEMPO_TOPUP_TOKEN_ADDRESS?.trim();
+  const templatedBase = applyAddressTemplate(base, walletAddress);
+  const topupUrl = new URL(templatedBase);
 
-  const requestParams = {};
-  if (walletAddress) {
-    requestParams.address = walletAddress;
-  }
-  if (Number.isFinite(chainId) && chainId > 0) {
-    requestParams.chainId = chainId;
-  }
-  if (tokenAddress && /^[0-9a-zA-Z]+$/.test(tokenAddress)) {
-    requestParams.token = tokenAddress;
-  }
-  if (rawAmount) {
-    requestParams.value = rawAmount;
+  if (topupUrl.pathname.includes("/embed/rpc/wallet_deposit")) {
+    const requestParams = {};
+    if (walletAddress) {
+      requestParams.address = walletAddress;
+    }
+    if (Number.isFinite(chainId) && chainId > 0) {
+      requestParams.chainId = chainId;
+    }
+    if (tokenAddress && /^[0-9a-zA-Z]+$/.test(tokenAddress)) {
+      requestParams.token = tokenAddress;
+    }
+    if (rawAmount) {
+      requestParams.value = rawAmount;
+    }
+
+    topupUrl.searchParams.set("id", "1");
+    topupUrl.searchParams.set("jsonrpc", "2.0");
+    topupUrl.searchParams.set("method", "wallet_deposit");
+    topupUrl.searchParams.set("params", JSON.stringify([requestParams]));
+    return topupUrl.toString();
   }
 
-  const topupUrl = new URL(base);
-  topupUrl.searchParams.set("id", "1");
-  topupUrl.searchParams.set("jsonrpc", "2.0");
-  topupUrl.searchParams.set("method", "wallet_deposit");
-  topupUrl.searchParams.set("params", JSON.stringify([requestParams]));
+  if (walletAddress && !topupUrl.searchParams.has("wallet")) {
+    topupUrl.searchParams.set("wallet", walletAddress);
+  }
+  if (rawAmount && !topupUrl.searchParams.has("amount")) {
+    topupUrl.searchParams.set("amount", rawAmount);
+  }
+  if (Number.isFinite(chainId) && chainId > 0 && !topupUrl.searchParams.has("chainId")) {
+    topupUrl.searchParams.set("chainId", String(chainId));
+  }
+  if (tokenAddress && /^[0-9a-zA-Z]+$/.test(tokenAddress) && !topupUrl.searchParams.has("token")) {
+    topupUrl.searchParams.set("token", tokenAddress);
+  }
   return topupUrl.toString();
 }
 

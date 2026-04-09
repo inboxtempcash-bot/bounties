@@ -114,7 +114,7 @@ First-time user real-pay flow:
 2. CLI says how to list/select alternatives.
 3. If mainnet wallet balance is empty, CLI prompts top-up and opens a funding URL.
 4. If Stripe checkout is configured, CLI injects the detected wallet address into your checkout URL if it contains `{address}` (or fetches a dynamic checkout URL from your API).
-5. If Stripe checkout is not configured, CLI opens Tempo hosted top-up (`wallet_deposit`) with wallet address + chain/amount defaults.
+5. If Stripe checkout is not configured, CLI opens Tempo hosted top-up (`/welcome`) with wallet/amount/chain query hints.
 6. After checkout, CLI waits for wallet balance update and then continues request execution.
 
 Optional explicit setup:
@@ -155,7 +155,7 @@ MPP configuration:
 - `AUTOROUTER_STRIPE_CHECKOUT_URL_TEMPLATE` (same behavior as above; useful for template-only setups)
 - `AUTOROUTER_STRIPE_CHECKOUT_API_URL` (POST endpoint that returns `{ checkoutUrl }` or `{ url }` for a given wallet address)
 - `AUTOROUTER_STRIPE_CHECKOUT_API_KEY` (optional bearer token for the checkout API)
-- `AUTOROUTER_DEFAULT_TOPUP_URL` (default: `https://wallet.tempo.xyz/embed/rpc/wallet_deposit`)
+- `AUTOROUTER_DEFAULT_TOPUP_URL` (default: `https://wallet.tempo.xyz/welcome`; can also be a custom Stripe URL)
 - `AUTOROUTER_DEFAULT_TOPUP_USD` (default: `20`, passed to wallet deposit prompt)
 - `AUTOROUTER_TEMPO_TOPUP_CHAIN_ID` (default: `4217`)
 - `AUTOROUTER_TEMPO_TOPUP_TOKEN_ADDRESS` (optional token address to preselect in hosted top-up)
