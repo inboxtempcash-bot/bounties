@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import process from "node:process";
 import { routeTask } from "../core/router.js";
@@ -411,6 +411,43 @@ function runCommand(command, commandArgs) {
   });
 }
 
+function runCommandCapture(command, commandArgs) {
+  return new Promise((resolve, reject) => {
+    execFile(command, commandArgs, (error, stdout, stderr) => {
+      if (error) {
+        const wrapped = new Error(stderr || stdout || error.message);
+        wrapped.cause = error;
+        reject(wrapped);
+        return;
+      }
+      resolve({
+        stdout: String(stdout ?? ""),
+        stderr: String(stderr ?? "")
+      });
+    });
+  });
+}
+
+function runInteractiveCommand(command, commandArgs) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, commandArgs, {
+      stdio: "inherit"
+    });
+
+    child.on("error", (error) => {
+      reject(error);
+    });
+
+    child.on("exit", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(`${command} ${commandArgs.join(" ")} exited with code ${code ?? "unknown"}.`));
+    });
+  });
+}
+
 function sleep(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -590,6 +627,51 @@ async function runFiatTopupFlow(options, context = {}) {
   }
 }
 
+function resolveTempoBinary() {
+  const explicit = process.env.AUTOROUTER_TEMPO_BIN?.trim();
+  if (explicit) {
+    return explicit;
+  }
+
+  const home = process.env.HOME?.trim();
+  if (home) {
+    return `${home}/.tempo/bin/tempo`;
+  }
+
+  return "tempo";
+}
+
+async function runTempoWalletTopupFlow(context = {}) {
+  const { walletAddress } = context;
+  if (!walletAddress) {
+    throw new Error("Cannot start Tempo wallet top-up without a wallet address.");
+  }
+
+  const tempoBin = resolveTempoBinary();
+  let ready = false;
+
+  try {
+    const whoami = await runCommandCapture(tempoBin, ["wallet", "whoami", "--json-output"]);
+    const output = `${whoami.stdout}\n${whoami.stderr}`;
+    ready = /"ready"\s*:\s*true/i.test(output);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("ENOENT") || message.includes("not found")) {
+      throw new Error(
+        "Tempo CLI not found. Install it first with: curl -fsSL https://tempo.xyz/install | bash"
+      );
+    }
+  }
+
+  if (!ready) {
+    console.log("Tempo wallet login required. Complete browser auth to continue.");
+    await runInteractiveCommand(tempoBin, ["wallet", "login"]);
+  }
+
+  console.log(`Opening Tempo wallet fund flow for ${walletAddress}...`);
+  await runInteractiveCommand(tempoBin, ["wallet", "fund", "--address", walletAddress]);
+}
+
 async function waitForWalletBalanceUpdate(setupArgs, options = {}) {
   const timeoutSec = Number(process.env.AUTOROUTER_TOPUP_TIMEOUT_SEC ?? 180);
   const pollMs = Number(process.env.AUTOROUTER_TOPUP_POLL_MS ?? 3000);
@@ -741,10 +823,12 @@ async function runOneCommand(args) {
         } else {
           if (options.realUsd && !checkoutConfigured) {
             console.log(
-              `Direct wallet top-up mode: opening Tempo hosted mainnet funding flow for ${accountAddress ?? "(unknown address)"}.`
+              `Direct wallet top-up mode: funding via Tempo wallet CLI for ${accountAddress ?? "(unknown address)"}.`
             );
+            await runTempoWalletTopupFlow({ walletAddress: accountAddress });
+          } else {
+            await runFiatTopupFlow(options, { walletAddress: accountAddress });
           }
-          await runFiatTopupFlow(options, { walletAddress: accountAddress });
         }
         const balanceAfter = await waitForWalletBalanceUpdate(setupArgs, { requireMainnetBalance });
         if (balanceAfter) {

@@ -19,7 +19,7 @@ One-command mode:
 - Default production onboarding is direct wallet top-up (user funds their own Tempo wallet; no treasury USDC inventory required).
 - If Stripe checkout is configured (URL or API), CLI uses that.
 - Testnet faucet fallback is disabled by default. Enable it only for demos with `AUTOROUTER_ENABLE_TESTNET_FAUCET_FALLBACK=1`.
-- Use `--real-usd` to force mainnet for real USD funding. If Stripe checkout is not configured, CLI falls back to Tempo hosted wallet funding page.
+- Use `--real-usd` to force mainnet for real USD funding. If Stripe checkout is not configured, CLI uses `tempo wallet login` + `tempo wallet fund --address <mppx-address>`.
 - Use `--payment simulated` for dry-run/demo mode.
 
 Pricing modes:
@@ -117,7 +117,7 @@ First-time user real-pay flow:
 2. CLI says how to list/select alternatives.
 3. If mainnet wallet balance is empty, CLI prompts top-up and opens a funding URL.
 4. If Stripe checkout is configured, CLI injects the detected wallet address into your checkout URL if it contains `{address}` (or fetches a dynamic checkout URL from your API).
-5. If Stripe checkout is not configured, CLI opens Tempo hosted wallet balances (`/balances`) with wallet/amount/chain query hints.
+5. If Stripe checkout is not configured in real-USD mode, CLI runs Tempo wallet funding flow directly for the same MPP wallet address (`tempo wallet fund --address ...`).
 6. If `AUTOROUTER_ENABLE_TESTNET_FAUCET_FALLBACK=1` and you are on testnet RPC, CLI can request faucet funds via `tempo_fundAddress`.
 7. After checkout or faucet funding, CLI waits for wallet balance update and then continues request execution.
 
@@ -164,6 +164,7 @@ MPP configuration:
 - `AUTOROUTER_DEFAULT_TOPUP_USD` (default: `20`, passed to wallet deposit prompt)
 - `AUTOROUTER_TEMPO_TOPUP_CHAIN_ID` (default: `4217`)
 - `AUTOROUTER_TEMPO_TOPUP_TOKEN_ADDRESS` (optional token address to preselect in hosted top-up)
+- `AUTOROUTER_TEMPO_BIN` (optional path override for Tempo CLI; default `~/.tempo/bin/tempo`)
 
 Execution configuration:
 - `OPENROUTER_API_KEY` enables real model completions from selected provider model IDs.

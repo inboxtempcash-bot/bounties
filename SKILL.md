@@ -18,9 +18,9 @@ npx -y github:inboxtempcash-bot/bounties#main one --type video --source mpp --au
 - CLI uses Stripe checkout only if configured.
 - `--checkout-url` can inject Stripe checkout URL per command, so end-users can run one command with no env setup.
 - If Stripe is not configured and on testnet RPC, CLI uses Tempo faucet funding (`tempo_fundAddress`) only when `AUTOROUTER_ENABLE_TESTNET_FAUCET_FALLBACK=1`.
-- If Stripe is not configured and not on testnet RPC, CLI falls back to Tempo wallet balances (`wallet.tempo.xyz/balances`).
+- If Stripe is not configured and `--real-usd` is used, CLI runs `tempo wallet login` (if needed) and `tempo wallet fund --address <mppx-wallet>`.
 - Wallet address is printed by CLI and must be used as the funding destination.
-- For real USD, run with `--real-usd`; Stripe checkout is optional (Tempo hosted wallet funding is used when Stripe is not configured).
+- For real USD, run with `--real-usd`; Stripe checkout is optional (Tempo wallet CLI funding is used when Stripe is not configured).
 
 ## Stripe config
 
