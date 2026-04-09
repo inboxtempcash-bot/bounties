@@ -31,6 +31,15 @@ Quick local server from this repo:
 export STRIPE_SECRET_KEY="sk_live_..."
 export STRIPE_WEBHOOK_SECRET="whsec_..."
 export AUTOROUTER_CHECKOUT_SERVER_TOKEN="your-server-token"
+
+# Optional auto settlement from Stripe payment to user's wallet balance
+export AUTOROUTER_SETTLEMENT_MODE="erc20_transfer"
+export AUTOROUTER_SETTLEMENT_RPC_URL="https://rpc.presto.tempo.xyz"
+export AUTOROUTER_SETTLEMENT_CHAIN_ID="4217"
+export AUTOROUTER_SETTLEMENT_PRIVATE_KEY="0x..."
+export AUTOROUTER_SETTLEMENT_TOKEN_ADDRESS="0x..."
+export AUTOROUTER_SETTLEMENT_TOKEN_DECIMALS="6"
+
 npm run stripe:server
 
 export AUTOROUTER_STRIPE_CHECKOUT_API_URL="http://localhost:8787/api/stripe/checkout"
