@@ -531,6 +531,15 @@ function resolveConfiguredCheckoutTemplate(config) {
   return candidates.find((value) => looksLikeHttpUrl(value))?.trim();
 }
 
+async function hasConfiguredCheckout() {
+  if (looksLikeHttpUrl(process.env.AUTOROUTER_STRIPE_CHECKOUT_API_URL)) {
+    return true;
+  }
+
+  const config = await getConfig();
+  return Boolean(resolveConfiguredCheckoutTemplate(config));
+}
+
 async function resolveCheckoutUrl(_options, context = {}) {
   const { walletAddress } = context;
 
@@ -578,7 +587,7 @@ async function runFiatTopupFlow(options, context = {}) {
 async function waitForWalletBalanceUpdate(setupArgs, options = {}) {
   const timeoutSec = Number(process.env.AUTOROUTER_TOPUP_TIMEOUT_SEC ?? 180);
   const pollMs = Number(process.env.AUTOROUTER_TOPUP_POLL_MS ?? 3000);
-  const requireMainnetBalance = process.env.AUTOROUTER_REQUIRE_MAINNET_BALANCE !== "0";
+  const requireMainnetBalance = options.requireMainnetBalance ?? (process.env.AUTOROUTER_REQUIRE_MAINNET_BALANCE !== "0");
   const timeoutMs = Math.max(1000, timeoutSec * 1000);
   const start = Date.now();
 
@@ -694,7 +703,11 @@ async function runOneCommand(args) {
   if (paymentMode === "mpp") {
     const balanceView = await accountView(setupArgs);
     const accountAddress = extractAccountAddress(balanceView.stdout);
-    const requireMainnetBalance = process.env.AUTOROUTER_REQUIRE_MAINNET_BALANCE !== "0";
+    const checkoutConfigured = await hasConfiguredCheckout();
+    const preferTestnetFaucet = !checkoutConfigured && setupArgs.rpcUrl === TESTNET_RPC_URL;
+    const requireMainnetBalance = preferTestnetFaucet
+      ? false
+      : (process.env.AUTOROUTER_REQUIRE_MAINNET_BALANCE !== "0");
     const walletHasBalance = requireMainnetBalance
       ? hasPositiveMainnetUsdBalance(balanceView.stdout)
       : hasPositiveBalance(balanceView.stdout);
@@ -702,8 +715,15 @@ async function runOneCommand(args) {
       if (accountAddress) {
         console.log(`Fund this MPP wallet address: ${accountAddress}`);
       }
-      await runFiatTopupFlow(options, { walletAddress: accountAddress });
-      const balanceAfter = await waitForWalletBalanceUpdate(setupArgs);
+      if (preferTestnetFaucet) {
+        console.log(
+          "No Stripe checkout configured. Using Tempo testnet faucet funding (tempo_fundAddress) per docs."
+        );
+        await runMppx(["account", "fund", ...buildMppxArgs(setupArgs)]);
+      } else {
+        await runFiatTopupFlow(options, { walletAddress: accountAddress });
+      }
+      const balanceAfter = await waitForWalletBalanceUpdate(setupArgs, { requireMainnetBalance });
       if (balanceAfter) {
         console.log("Top-up detected. Wallet balance updated.");
         console.log(balanceAfter);
@@ -728,7 +748,14 @@ async function runOneCommand(args) {
     routedArgs.push("--seconds", String(options.seconds));
   }
 
-  await runRouteCommand(routedArgs);
+  const restoreMppEnv = paymentMode === "mpp"
+    ? applyMppRuntimeEnv(setupArgs)
+    : () => {};
+  try {
+    await runRouteCommand(routedArgs);
+  } finally {
+    restoreMppEnv();
+  }
 }
 
 function baseMppArgs(args, defaultRpc = undefined) {
@@ -742,6 +769,34 @@ function baseMppArgs(args, defaultRpc = undefined) {
   return {
     account,
     rpcUrl
+  };
+}
+
+function applyMppRuntimeEnv(baseArgs = {}) {
+  const previous = {
+    AUTOROUTER_MPP_ACCOUNT: process.env.AUTOROUTER_MPP_ACCOUNT,
+    AUTOROUTER_MPP_RPC_URL: process.env.AUTOROUTER_MPP_RPC_URL
+  };
+
+  if (baseArgs.account) {
+    process.env.AUTOROUTER_MPP_ACCOUNT = baseArgs.account;
+  }
+  if (baseArgs.rpcUrl) {
+    process.env.AUTOROUTER_MPP_RPC_URL = baseArgs.rpcUrl;
+  }
+
+  return () => {
+    if (previous.AUTOROUTER_MPP_ACCOUNT === undefined) {
+      delete process.env.AUTOROUTER_MPP_ACCOUNT;
+    } else {
+      process.env.AUTOROUTER_MPP_ACCOUNT = previous.AUTOROUTER_MPP_ACCOUNT;
+    }
+
+    if (previous.AUTOROUTER_MPP_RPC_URL === undefined) {
+      delete process.env.AUTOROUTER_MPP_RPC_URL;
+    } else {
+      process.env.AUTOROUTER_MPP_RPC_URL = previous.AUTOROUTER_MPP_RPC_URL;
+    }
   };
 }
 

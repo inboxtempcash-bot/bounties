@@ -16,7 +16,9 @@ One-command mode:
 - `one` auto-creates MPP account and routes with cheapest pricing.
 - For `--source mpp` or `--source all`, `one` uses real MPP payments by default.
 - If wallet has no mainnet PathUSD/USDC balance, it prompts top-up and opens a funding URL automatically.
-- If Stripe checkout is configured (URL or API), CLI uses that. Otherwise it falls back to Tempo hosted wallet top-up for the detected address.
+- If Stripe checkout is configured (URL or API), CLI uses that.
+- If Stripe checkout is not configured and RPC is Tempo testnet, CLI auto-uses faucet funding (`tempo_fundAddress`) via `mppx account fund`.
+- If Stripe checkout is not configured and RPC is not testnet, CLI falls back to opening Tempo wallet balances for manual top-up.
 - Use `--payment simulated` for dry-run/demo mode.
 
 Pricing modes:
@@ -114,8 +116,9 @@ First-time user real-pay flow:
 2. CLI says how to list/select alternatives.
 3. If mainnet wallet balance is empty, CLI prompts top-up and opens a funding URL.
 4. If Stripe checkout is configured, CLI injects the detected wallet address into your checkout URL if it contains `{address}` (or fetches a dynamic checkout URL from your API).
-5. If Stripe checkout is not configured, CLI opens Tempo hosted wallet balances (`/balances`) with wallet/amount/chain query hints.
-6. After checkout, CLI waits for wallet balance update and then continues request execution.
+5. If Stripe checkout is not configured on Tempo testnet, CLI requests faucet funds using `tempo_fundAddress`.
+6. If Stripe checkout is not configured on non-testnet RPC, CLI opens Tempo hosted wallet balances (`/balances`) with wallet/amount/chain query hints.
+7. After checkout or faucet funding, CLI waits for wallet balance update and then continues request execution.
 
 Optional explicit setup:
 
