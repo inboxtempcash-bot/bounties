@@ -1,6 +1,6 @@
 # AutoRouter Skill
 
-Use this skill to route AI tasks to the best-priced API with MPP payments and Stripe top-up.
+Use this skill to route AI tasks to the best-priced API with MPP payments and automatic wallet top-up.
 
 ## Goal
 
@@ -13,7 +13,8 @@ npx -y github:inboxtempcash-bot/bounties#main one --type video --source mpp --au
 ## Payment and top-up behavior
 
 - If wallet has balance, continue.
-- If wallet is empty, open Stripe checkout and wait for balance update.
+- If wallet is empty, open top-up and wait for balance update.
+- CLI uses Stripe checkout only if configured; otherwise it falls back to Tempo hosted wallet top-up automatically.
 - Wallet address is printed by CLI and must be used as the funding destination.
 
 ## Stripe config
@@ -54,6 +55,13 @@ Or use static URL template:
 
 ```bash
 export AUTOROUTER_STRIPE_CHECKOUT_URL="https://yourapp.com/topup?wallet={address}"
+```
+
+Optional hosted top-up defaults:
+
+```bash
+export AUTOROUTER_DEFAULT_TOPUP_USD="20"
+export AUTOROUTER_TEMPO_TOPUP_CHAIN_ID="4217"
 ```
 
 ## Common tasks

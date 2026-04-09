@@ -16,7 +16,7 @@ One-command mode:
 - `one` auto-creates MPP account and routes with cheapest pricing.
 - For `--source mpp` or `--source all`, `one` uses real MPP payments by default.
 - If wallet has no mainnet PathUSD/USDC balance, it prompts top-up and opens a funding URL automatically.
-- Top-up requires Stripe checkout configuration (URL or API) so funds are mapped to the user's wallet.
+- If Stripe checkout is configured (URL or API), CLI uses that. Otherwise it falls back to Tempo hosted wallet top-up for the detected address.
 - Use `--payment simulated` for dry-run/demo mode.
 
 Pricing modes:
@@ -69,7 +69,7 @@ One command end-to-end (after global install):
 autorouter one --type video --source mpp --auto "make a 6 second teaser" --seconds 6
 ```
 
-Stripe top-up wiring examples:
+Optional Stripe top-up wiring (overrides default hosted Tempo top-up):
 
 ```bash
 # Static checkout URL that embeds wallet address
@@ -113,8 +113,8 @@ First-time user real-pay flow:
 1. CLI previews APIs found for request and auto-selects best-value option (price + rating).
 2. CLI says how to list/select alternatives.
 3. If mainnet wallet balance is empty, CLI prompts top-up and opens a funding URL.
-4. CLI injects the detected wallet address into your checkout URL if it contains `{address}` (or fetches a dynamic checkout URL from your API).
-5. If no checkout URL is configured, interactive mode asks once and saves it to `~/.autorouter/config.json`.
+4. If Stripe checkout is configured, CLI injects the detected wallet address into your checkout URL if it contains `{address}` (or fetches a dynamic checkout URL from your API).
+5. If Stripe checkout is not configured, CLI opens Tempo hosted top-up (`wallet_deposit`) with wallet address + chain/amount defaults.
 6. After checkout, CLI waits for wallet balance update and then continues request execution.
 
 Optional explicit setup:
@@ -155,7 +155,10 @@ MPP configuration:
 - `AUTOROUTER_STRIPE_CHECKOUT_URL_TEMPLATE` (same behavior as above; useful for template-only setups)
 - `AUTOROUTER_STRIPE_CHECKOUT_API_URL` (POST endpoint that returns `{ checkoutUrl }` or `{ url }` for a given wallet address)
 - `AUTOROUTER_STRIPE_CHECKOUT_API_KEY` (optional bearer token for the checkout API)
-- If none of the above are set, CLI prompts once in interactive mode and stores URL in `~/.autorouter/config.json`.
+- `AUTOROUTER_DEFAULT_TOPUP_URL` (default: `https://wallet.tempo.xyz/embed/rpc/wallet_deposit`)
+- `AUTOROUTER_DEFAULT_TOPUP_USD` (default: `20`, passed to wallet deposit prompt)
+- `AUTOROUTER_TEMPO_TOPUP_CHAIN_ID` (default: `4217`)
+- `AUTOROUTER_TEMPO_TOPUP_TOKEN_ADDRESS` (optional token address to preselect in hosted top-up)
 
 Execution configuration:
 - `OPENROUTER_API_KEY` enables real model completions from selected provider model IDs.

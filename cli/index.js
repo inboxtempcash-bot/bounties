@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import process from "node:process";
 import { routeTask } from "../core/router.js";
-import { CONFIG_FILE, getConfig, setConfig } from "../core/config.js";
+import { getConfig } from "../core/config.js";
 import { collectBids } from "../core/bidding.js";
 import { resolveLivePricing } from "../core/livePricing.js";
 import { getMppServices } from "../core/mppServices.js";
@@ -440,6 +440,34 @@ function applyAddressTemplate(url, walletAddress) {
     .replaceAll("{walletAddressRaw}", walletAddress);
 }
 
+function buildTempoTopupUrl(walletAddress) {
+  const base = (process.env.AUTOROUTER_DEFAULT_TOPUP_URL || "https://wallet.tempo.xyz/embed/rpc/wallet_deposit").trim();
+  const rawAmount = String(process.env.AUTOROUTER_DEFAULT_TOPUP_USD ?? "20").trim();
+  const chainId = Number(process.env.AUTOROUTER_TEMPO_TOPUP_CHAIN_ID ?? 4217);
+  const tokenAddress = process.env.AUTOROUTER_TEMPO_TOPUP_TOKEN_ADDRESS?.trim();
+
+  const requestParams = {};
+  if (walletAddress) {
+    requestParams.address = walletAddress;
+  }
+  if (Number.isFinite(chainId) && chainId > 0) {
+    requestParams.chainId = chainId;
+  }
+  if (tokenAddress && /^[0-9a-zA-Z]+$/.test(tokenAddress)) {
+    requestParams.token = tokenAddress;
+  }
+  if (rawAmount) {
+    requestParams.value = rawAmount;
+  }
+
+  const topupUrl = new URL(base);
+  topupUrl.searchParams.set("id", "1");
+  topupUrl.searchParams.set("jsonrpc", "2.0");
+  topupUrl.searchParams.set("method", "wallet_deposit");
+  topupUrl.searchParams.set("params", JSON.stringify([requestParams]));
+  return topupUrl.toString();
+}
+
 async function resolveCheckoutUrlViaApi(walletAddress) {
   const apiUrl = process.env.AUTOROUTER_STRIPE_CHECKOUT_API_URL;
   if (!looksLikeHttpUrl(apiUrl)) {
@@ -486,7 +514,7 @@ function resolveConfiguredCheckoutTemplate(config) {
   return candidates.find((value) => looksLikeHttpUrl(value))?.trim();
 }
 
-async function resolveCheckoutUrl(options, context = {}) {
+async function resolveCheckoutUrl(_options, context = {}) {
   const { walletAddress } = context;
 
   const apiUrl = await resolveCheckoutUrlViaApi(walletAddress);
@@ -500,31 +528,11 @@ async function resolveCheckoutUrl(options, context = {}) {
     return applyAddressTemplate(configuredTemplate, walletAddress);
   }
 
-  if (!process.stdin.isTTY) {
-    throw new Error(
-      `No Stripe checkout configured. Set AUTOROUTER_STRIPE_CHECKOUT_URL (or AUTOROUTER_STRIPE_CHECKOUT_API_URL) so users can top up and fund wallet ${walletAddress ?? "(unknown address)"}.`
-    );
-  }
-
-  console.log("No Stripe checkout URL is configured yet.");
-  const entered = (await promptUser("Paste Stripe Checkout URL (you can use {address} placeholder) or press Enter to cancel: ")).trim();
-  if (!entered) {
-    throw new Error("Wallet funding canceled. No checkout URL configured.");
-  }
-  if (!looksLikeHttpUrl(entered)) {
-    throw new Error("Invalid URL. Please provide a full https:// Stripe Checkout URL.");
-  }
-
-  const shouldSave = options.yes
-    ? true
-    : await confirmYes("Save this checkout URL for future runs? [Y/n] ", true);
-
-  if (shouldSave) {
-    await setConfig({ stripeCheckoutUrl: entered });
-    console.log(`Saved checkout URL in ${CONFIG_FILE}`);
-  }
-
-  return applyAddressTemplate(entered, walletAddress);
+  const fallbackUrl = buildTempoTopupUrl(walletAddress);
+  console.log(
+    `No Stripe checkout configured. Falling back to Tempo hosted top-up for wallet ${walletAddress ?? "(unknown address)"}: ${fallbackUrl}`
+  );
+  return fallbackUrl;
 }
 
 async function runFiatTopupFlow(options, context = {}) {
