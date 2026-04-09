@@ -733,17 +733,17 @@ async function runOneCommand(args) {
         if (accountAddress) {
           console.log(`Fund this MPP wallet address: ${accountAddress}`);
         }
-        if (options.realUsd && !checkoutConfigured) {
-          throw new Error(
-            `Real USD top-up requires Stripe checkout configuration. Set AUTOROUTER_STRIPE_CHECKOUT_URL (or AUTOROUTER_STRIPE_CHECKOUT_API_URL) to fund wallet ${accountAddress ?? "(unknown address)"} on ${MAINNET_RPC_URL}.`
-          );
-        }
         if (preferTestnetFaucet) {
           console.log(
             "No Stripe checkout configured. Using Tempo testnet faucet funding (tempo_fundAddress) per docs."
           );
           await runMppx(["account", "fund", ...buildMppxArgs(setupArgs)]);
         } else {
+          if (options.realUsd && !checkoutConfigured) {
+            console.log(
+              `No Stripe checkout configured. Opening Tempo hosted wallet funding flow on mainnet for ${accountAddress ?? "(unknown address)"} instead.`
+            );
+          }
           await runFiatTopupFlow(options, { walletAddress: accountAddress });
         }
         const balanceAfter = await waitForWalletBalanceUpdate(setupArgs, { requireMainnetBalance });

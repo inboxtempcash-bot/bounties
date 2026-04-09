@@ -18,7 +18,7 @@ One-command mode:
 - If wallet has no mainnet PathUSD/USDC balance, it prompts top-up and opens a funding URL automatically.
 - If Stripe checkout is configured (URL or API), CLI uses that.
 - Testnet faucet fallback is disabled by default. Enable it only for demos with `AUTOROUTER_ENABLE_TESTNET_FAUCET_FALLBACK=1`.
-- Use `--real-usd` to force mainnet + Stripe checkout for real USD funding.
+- Use `--real-usd` to force mainnet for real USD funding. If Stripe checkout is not configured, CLI falls back to Tempo hosted wallet funding page.
 - Use `--payment simulated` for dry-run/demo mode.
 
 Pricing modes:
