@@ -104,10 +104,11 @@ export async function handleMppPayment({ amountUsd, requestId, providerName }) {
   const status = parseReceiptStatus(raw) ?? "unknown";
   const challengeAmount = parseChallengeAmount(raw);
   const usingDemoEndpoint = chargeUrl === "https://mpp.dev/api/ping/paid";
+  const usingTestnet = baseArgs.rpcUrl === TESTNET_RPC_URL;
 
   return {
     protocol: "mpp",
-    summary: `mppx payment success (${status}${reference ? `, receipt ${reference.slice(0, 14)}...` : ""}${challengeAmount ? `, challenge ${challengeAmount}` : ""}; routed estimate ${formatMoney(amountUsd)} USD${usingDemoEndpoint ? ", demo endpoint (payment smoke test)" : ""})`,
+    summary: `mppx payment success (${status}${reference ? `, receipt ${reference.slice(0, 14)}...` : ""}${challengeAmount ? `, challenge ${challengeAmount}` : ""}; routed estimate ${formatMoney(amountUsd)} USD${usingTestnet ? ", testnet RPC" : ""}${usingDemoEndpoint ? ", demo endpoint (payment smoke test)" : ""})`,
     receiptReference: reference,
     chargeUrl,
     rpcUrl: baseArgs.rpcUrl
