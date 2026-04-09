@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 
 const TESTNET_RPC_URL = "https://rpc.moderato.tempo.xyz";
+const MAINNET_RPC_URL = "https://rpc.presto.tempo.xyz";
 
 function hasValue(value) {
   return typeof value === "string" && value.trim().length > 0;
@@ -155,4 +156,4 @@ export async function maybeFundTestnet(baseArgs = {}) {
   };
 }
 
-export { TESTNET_RPC_URL };
+export { MAINNET_RPC_URL, TESTNET_RPC_URL };

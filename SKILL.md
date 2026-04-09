@@ -15,9 +15,10 @@ npx -y github:inboxtempcash-bot/bounties#main one --type video --source mpp --au
 - If wallet has balance, continue.
 - If wallet is empty, open top-up and wait for balance update.
 - CLI uses Stripe checkout only if configured.
-- If Stripe is not configured and on testnet RPC, CLI uses Tempo faucet funding (`tempo_fundAddress`) automatically.
+- If Stripe is not configured and on testnet RPC, CLI uses Tempo faucet funding (`tempo_fundAddress`) only when `AUTOROUTER_ENABLE_TESTNET_FAUCET_FALLBACK=1`.
 - If Stripe is not configured and not on testnet RPC, CLI falls back to Tempo wallet balances (`wallet.tempo.xyz/balances`).
 - Wallet address is printed by CLI and must be used as the funding destination.
+- For real USD, run with `--real-usd` and configure Stripe checkout.
 
 ## Stripe config
 

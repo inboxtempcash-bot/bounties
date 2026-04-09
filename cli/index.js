@@ -14,6 +14,7 @@ import {
 } from "../providers/index.js";
 import { buildMppServiceProviders } from "../providers/mpp.js";
 import {
+  MAINNET_RPC_URL,
   TESTNET_RPC_URL,
   accountView,
   buildMppxArgs,
@@ -40,7 +41,7 @@ function printHelp() {
 
 Usage:
   autorouter run --type text|audio|video --auto "prompt" [--mode balanced|cheapest|fastest|best-quality] [--payment simulated|x402|mpp] [--pricing live|static] [--source core|mpp|all] [--model key-or-id] [--seconds n]
-  autorouter one --type text|audio|video --auto "prompt" [--source core|mpp|all] [--mode balanced|cheapest|fastest|best-quality] [--pricing live|static] [--payment simulated|x402|mpp] [--real-pay] [--seconds n] [--yes] [--force-topup]
+  autorouter one --type text|audio|video --auto "prompt" [--source core|mpp|all] [--mode balanced|cheapest|fastest|best-quality] [--pricing live|static] [--payment simulated|x402|mpp] [--real-pay] [--real-usd] [--seconds n] [--yes] [--force-topup]
   autorouter models list [--type text|audio|video] [--mode balanced|cheapest|fastest|best-quality] [--pricing live|static] [--source core|mpp|all] [--auto "sample prompt"] [--seconds n]
   autorouter text --auto "prompt" [--mode ...] [--payment ...] [--pricing ...]
   autorouter audio --auto "prompt" [--mode ...] [--payment ...] [--pricing ...] [--seconds n]
@@ -99,6 +100,8 @@ function parseOptions(args, defaults = {}) {
       i += 1;
     } else if (token === "--real-pay") {
       options.realPay = true;
+    } else if (token === "--real-usd") {
+      options.realUsd = true;
     } else if (token === "--skip-setup") {
       options.skipSetup = true;
     } else if (token === "--skip-fund") {
@@ -670,7 +673,8 @@ async function runOneCommand(args) {
     : (options.realPay
       ? "mpp"
       : ((options.source === "mpp" || options.source === "all") ? "mpp" : "simulated"));
-  const setupArgs = baseMppArgs(args, TESTNET_RPC_URL);
+  const defaultRpc = options.realUsd ? MAINNET_RPC_URL : TESTNET_RPC_URL;
+  const setupArgs = baseMppArgs(args, defaultRpc);
   const task = buildTask(options.type, options, true);
   const plannedProviders = await resolveProvidersBySource({
     modality: options.type,
@@ -701,10 +705,16 @@ async function runOneCommand(args) {
   }
 
   if (paymentMode === "mpp") {
+    if (options.realUsd && setupArgs.rpcUrl === TESTNET_RPC_URL) {
+      throw new Error(`--real-usd requires mainnet RPC. Use --rpc-url ${MAINNET_RPC_URL} (or set AUTOROUTER_MPP_RPC_URL).`);
+    }
+
     const balanceView = await accountView(setupArgs);
     const accountAddress = extractAccountAddress(balanceView.stdout);
     const checkoutConfigured = await hasConfiguredCheckout();
-    const preferTestnetFaucet = !checkoutConfigured && setupArgs.rpcUrl === TESTNET_RPC_URL;
+    const allowTestnetFaucet =
+      process.env.AUTOROUTER_ENABLE_TESTNET_FAUCET_FALLBACK === "1" && !options.realUsd;
+    const preferTestnetFaucet = !checkoutConfigured && allowTestnetFaucet && setupArgs.rpcUrl === TESTNET_RPC_URL;
     const requireMainnetBalance = preferTestnetFaucet
       ? false
       : (process.env.AUTOROUTER_REQUIRE_MAINNET_BALANCE !== "0");
@@ -714,6 +724,11 @@ async function runOneCommand(args) {
     if (options.forceTopup || !walletHasBalance) {
       if (accountAddress) {
         console.log(`Fund this MPP wallet address: ${accountAddress}`);
+      }
+      if (options.realUsd && !checkoutConfigured) {
+        throw new Error(
+          `Real USD top-up requires Stripe checkout configuration. Set AUTOROUTER_STRIPE_CHECKOUT_URL (or AUTOROUTER_STRIPE_CHECKOUT_API_URL) to fund wallet ${accountAddress ?? "(unknown address)"} on ${MAINNET_RPC_URL}.`
+        );
       }
       if (preferTestnetFaucet) {
         console.log(

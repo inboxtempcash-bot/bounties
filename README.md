@@ -17,8 +17,8 @@ One-command mode:
 - For `--source mpp` or `--source all`, `one` uses real MPP payments by default.
 - If wallet has no mainnet PathUSD/USDC balance, it prompts top-up and opens a funding URL automatically.
 - If Stripe checkout is configured (URL or API), CLI uses that.
-- If Stripe checkout is not configured and RPC is Tempo testnet, CLI auto-uses faucet funding (`tempo_fundAddress`) via `mppx account fund`.
-- If Stripe checkout is not configured and RPC is not testnet, CLI falls back to opening Tempo wallet balances for manual top-up.
+- Testnet faucet fallback is disabled by default. Enable it only for demos with `AUTOROUTER_ENABLE_TESTNET_FAUCET_FALLBACK=1`.
+- Use `--real-usd` to force mainnet + Stripe checkout for real USD funding.
 - Use `--payment simulated` for dry-run/demo mode.
 
 Pricing modes:
@@ -68,7 +68,7 @@ npx -y github:inboxtempcash-bot/bounties one --type video --source mpp --auto "m
 One command end-to-end (after global install):
 
 ```bash
-autorouter one --type video --source mpp --auto "make a 6 second teaser" --seconds 6
+autorouter one --type video --source mpp --auto "make a 6 second teaser" --seconds 6 --real-usd
 ```
 
 Optional Stripe top-up wiring (overrides default hosted Tempo top-up):
@@ -116,8 +116,8 @@ First-time user real-pay flow:
 2. CLI says how to list/select alternatives.
 3. If mainnet wallet balance is empty, CLI prompts top-up and opens a funding URL.
 4. If Stripe checkout is configured, CLI injects the detected wallet address into your checkout URL if it contains `{address}` (or fetches a dynamic checkout URL from your API).
-5. If Stripe checkout is not configured on Tempo testnet, CLI requests faucet funds using `tempo_fundAddress`.
-6. If Stripe checkout is not configured on non-testnet RPC, CLI opens Tempo hosted wallet balances (`/balances`) with wallet/amount/chain query hints.
+5. If Stripe checkout is not configured, CLI opens Tempo hosted wallet balances (`/balances`) with wallet/amount/chain query hints.
+6. If `AUTOROUTER_ENABLE_TESTNET_FAUCET_FALLBACK=1` and you are on testnet RPC, CLI can request faucet funds via `tempo_fundAddress`.
 7. After checkout or faucet funding, CLI waits for wallet balance update and then continues request execution.
 
 Optional explicit setup:
@@ -131,7 +131,7 @@ This creates/uses an `mppx` account and syncs skills into local agent folders (`
 ## Commands
 
 - `autorouter models list [--type text|audio|video] [--mode balanced|cheapest|fastest|best-quality] [--pricing live|static] [--source core|mpp|all] [--auto "sample prompt"] [--seconds n]`
-- `autorouter one --type text|audio|video --auto "prompt" [--source core|mpp|all] [--mode balanced|cheapest|fastest|best-quality] [--pricing live|static] [--payment simulated|x402|mpp] [--real-pay] [--seconds n]`
+- `autorouter one --type text|audio|video --auto "prompt" [--source core|mpp|all] [--mode balanced|cheapest|fastest|best-quality] [--pricing live|static] [--payment simulated|x402|mpp] [--real-pay] [--real-usd] [--seconds n]`
 - `autorouter run --type text|audio|video --auto "prompt" [--mode balanced|cheapest|fastest|best-quality] [--payment simulated|x402|mpp] [--pricing live|static] [--source core|mpp|all] [--model key-or-id] [--seconds n]`
 - `autorouter text --auto "prompt" ...` (alias for `run --type text`)
 - `autorouter audio --auto "prompt" ...` (alias for `run --type audio`)
@@ -154,6 +154,7 @@ MPP configuration:
 - `AUTOROUTER_MPP_AUTO_CREATE_ACCOUNT` (`1` by default)
 - `AUTOROUTER_MPP_AUTO_FUND_TESTNET` (`0` by default; set `1` only for faucet-style testnet demos)
 - `AUTOROUTER_REQUIRE_MAINNET_BALANCE` (`1` by default for `one` top-up checks)
+- `AUTOROUTER_ENABLE_TESTNET_FAUCET_FALLBACK` (`0` by default; set `1` to allow auto-faucet on testnet when Stripe checkout is missing)
 - `AUTOROUTER_STRIPE_CHECKOUT_URL` (static checkout URL; supports `{address}` placeholder)
 - `AUTOROUTER_STRIPE_CHECKOUT_URL_TEMPLATE` (same behavior as above; useful for template-only setups)
 - `AUTOROUTER_STRIPE_CHECKOUT_API_URL` (POST endpoint that returns `{ checkoutUrl }` or `{ url }` for a given wallet address)
