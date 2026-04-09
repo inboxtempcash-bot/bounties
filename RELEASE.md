@@ -2,6 +2,15 @@
 
 Use this checklist to publish `autorouter` so users can install and run it tomorrow.
 
+## 0) Immediate global usage (already available)
+
+Users can run from any terminal now, no install:
+
+```bash
+npx -y github:inboxtempcash-bot/bounties --help
+npx -y github:inboxtempcash-bot/bounties one --type video --source mpp --auto "make a 6 second teaser" --seconds 6
+```
+
 ## 1) Verify package locally
 
 ```bash
@@ -21,6 +30,16 @@ After publish, users can install globally:
 
 ```bash
 npm i -g autorouter-cli
+```
+
+Or use GitHub Actions publish (recommended once):
+
+1. Add `NPM_TOKEN` in GitHub repo secrets.
+2. Push a semver tag:
+
+```bash
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
 ## 3) Verify install from clean shell
@@ -44,4 +63,3 @@ Then:
 ```bash
 autorouter one --type video --source mpp --auto "make a 6 second teaser" --seconds 6 --real-pay
 ```
-

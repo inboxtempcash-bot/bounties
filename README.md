@@ -27,7 +27,13 @@ Payment modes:
 
 ## Install
 
-From npm (recommended for users):
+Run globally from any terminal right now (no install):
+
+```bash
+npx -y github:inboxtempcash-bot/bounties --help
+```
+
+Permanent global install from npm (after publish):
 
 ```bash
 npm i -g autorouter-cli
@@ -42,7 +48,13 @@ npm link
 
 ## Quick start
 
-One command end-to-end:
+One command end-to-end from anywhere (no local clone required):
+
+```bash
+npx -y github:inboxtempcash-bot/bounties one --type video --source mpp --auto "make a 6 second teaser" --seconds 6
+```
+
+One command end-to-end (after global install):
 
 ```bash
 autorouter one --type video --source mpp --auto "make a 6 second teaser" --seconds 6
