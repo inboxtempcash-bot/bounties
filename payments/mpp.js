@@ -50,7 +50,7 @@ function providerChargeUrl(providerName) {
 function buildBaseArgs() {
   return {
     account: process.env.AUTOROUTER_MPP_ACCOUNT || process.env.MPPX_ACCOUNT,
-    rpcUrl: process.env.AUTOROUTER_MPP_RPC_URL || process.env.MPPX_RPC_URL || TESTNET_RPC_URL
+    rpcUrl: process.env.AUTOROUTER_MPP_RPC_URL || process.env.MPPX_RPC_URL || undefined
   };
 }
 
@@ -76,7 +76,7 @@ function readMethodOptArgs() {
 export async function handleMppPayment({ amountUsd, requestId, providerName }) {
   const baseArgs = buildBaseArgs();
   const autoCreate = process.env.AUTOROUTER_MPP_AUTO_CREATE_ACCOUNT !== "0";
-  const autoFundTestnet = process.env.AUTOROUTER_MPP_AUTO_FUND_TESTNET !== "0";
+  const autoFundTestnet = process.env.AUTOROUTER_MPP_AUTO_FUND_TESTNET === "1";
   const chargeUrl = providerChargeUrl(providerName);
 
   if (autoCreate) {
