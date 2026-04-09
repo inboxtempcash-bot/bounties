@@ -427,42 +427,87 @@ function looksLikeHttpUrl(value) {
   return typeof value === "string" && /^https?:\/\//i.test(value.trim());
 }
 
-function defaultTopupUrl() {
-  const candidate = process.env.AUTOROUTER_DEFAULT_TOPUP_URL || "https://wallet.tempo.xyz";
-  if (!looksLikeHttpUrl(candidate)) {
-    throw new Error("Invalid AUTOROUTER_DEFAULT_TOPUP_URL. Provide a full http(s) URL.");
+function applyAddressTemplate(url, walletAddress) {
+  if (!walletAddress || typeof walletAddress !== "string") {
+    return url;
   }
-  return candidate.trim();
+
+  const encoded = encodeURIComponent(walletAddress);
+  return url
+    .replaceAll("{address}", encoded)
+    .replaceAll("{walletAddress}", encoded)
+    .replaceAll("{address_raw}", walletAddress)
+    .replaceAll("{walletAddressRaw}", walletAddress);
 }
 
-async function resolveCheckoutUrl(options) {
-  const envUrl = process.env.AUTOROUTER_STRIPE_CHECKOUT_URL || process.env.AUTOROUTER_ONRAMP_URL;
-  if (looksLikeHttpUrl(envUrl)) {
-    return envUrl.trim();
+async function resolveCheckoutUrlViaApi(walletAddress) {
+  const apiUrl = process.env.AUTOROUTER_STRIPE_CHECKOUT_API_URL;
+  if (!looksLikeHttpUrl(apiUrl)) {
+    return null;
+  }
+
+  const headers = {
+    "Content-Type": "application/json",
+    Accept: "application/json"
+  };
+  if (process.env.AUTOROUTER_STRIPE_CHECKOUT_API_KEY) {
+    headers.Authorization = `Bearer ${process.env.AUTOROUTER_STRIPE_CHECKOUT_API_KEY}`;
+  }
+
+  const response = await fetch(apiUrl.trim(), {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      walletAddress,
+      address: walletAddress
+    })
+  });
+
+  if (!response.ok) {
+    const details = await response.text();
+    throw new Error(`Stripe checkout API failed (${response.status}): ${details}`);
+  }
+
+  const payload = await response.json().catch(() => null);
+  const checkoutUrl = payload?.checkoutUrl || payload?.url;
+  if (!looksLikeHttpUrl(checkoutUrl)) {
+    throw new Error("Stripe checkout API did not return a valid checkoutUrl/url.");
+  }
+  return checkoutUrl.trim();
+}
+
+function resolveConfiguredCheckoutTemplate(config) {
+  const candidates = [
+    process.env.AUTOROUTER_STRIPE_CHECKOUT_URL,
+    process.env.AUTOROUTER_ONRAMP_URL,
+    process.env.AUTOROUTER_STRIPE_CHECKOUT_URL_TEMPLATE,
+    config.stripeCheckoutUrl
+  ];
+  return candidates.find((value) => looksLikeHttpUrl(value))?.trim();
+}
+
+async function resolveCheckoutUrl(options, context = {}) {
+  const { walletAddress } = context;
+
+  const apiUrl = await resolveCheckoutUrlViaApi(walletAddress);
+  if (apiUrl) {
+    return apiUrl;
   }
 
   const config = await getConfig();
-  const savedUrl = config.stripeCheckoutUrl;
-  if (looksLikeHttpUrl(savedUrl)) {
-    return savedUrl.trim();
+  const configuredTemplate = resolveConfiguredCheckoutTemplate(config);
+  if (configuredTemplate) {
+    return applyAddressTemplate(configuredTemplate, walletAddress);
   }
 
-  const fallbackUrl = defaultTopupUrl();
-
   if (!process.stdin.isTTY) {
-    console.log(`No checkout URL configured. Using default top-up URL: ${fallbackUrl}`);
-    return fallbackUrl;
+    throw new Error(
+      `No Stripe checkout configured. Set AUTOROUTER_STRIPE_CHECKOUT_URL (or AUTOROUTER_STRIPE_CHECKOUT_API_URL) so users can top up and fund wallet ${walletAddress ?? "(unknown address)"}.`
+    );
   }
 
   console.log("No Stripe checkout URL is configured yet.");
-  const useFallback = options.yes
-    ? true
-    : await confirmYes(`Use default top-up URL (${fallbackUrl})? [Y/n] `, true);
-  if (useFallback) {
-    return fallbackUrl;
-  }
-
-  const entered = (await promptUser("Paste your Stripe Checkout URL for wallet top-ups (or press Enter to cancel): ")).trim();
+  const entered = (await promptUser("Paste Stripe Checkout URL (you can use {address} placeholder) or press Enter to cancel: ")).trim();
   if (!entered) {
     throw new Error("Wallet funding canceled. No checkout URL configured.");
   }
@@ -479,11 +524,11 @@ async function resolveCheckoutUrl(options) {
     console.log(`Saved checkout URL in ${CONFIG_FILE}`);
   }
 
-  return entered;
+  return applyAddressTemplate(entered, walletAddress);
 }
 
-async function runFiatTopupFlow(options) {
-  const checkoutUrl = await resolveCheckoutUrl(options);
+async function runFiatTopupFlow(options, context = {}) {
+  const checkoutUrl = await resolveCheckoutUrl(options, context);
 
   const shouldOpen = options.yes
     ? true
@@ -632,7 +677,7 @@ async function runOneCommand(args) {
       if (accountAddress) {
         console.log(`Fund this MPP wallet address: ${accountAddress}`);
       }
-      await runFiatTopupFlow(options);
+      await runFiatTopupFlow(options, { walletAddress: accountAddress });
       const balanceAfter = await waitForWalletBalanceUpdate(setupArgs);
       if (balanceAfter) {
         console.log("Top-up detected. Wallet balance updated.");
