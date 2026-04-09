@@ -39,7 +39,7 @@ npx -y github:inboxtempcash-bot/bounties --help
 Tweetable agent one-liner (Tempo-style):
 
 ```bash
-claude "Read https://raw.githubusercontent.com/inboxtempcash-bot/bounties/main/SKILL.md and use it to run: build me a 6 second teaser video about why you should join alliance"
+claude "Read https://gist.githubusercontent.com/inboxtempcash-bot/685190444dba6bed71ff4bcb464ccfc2/raw/d660fa574e5fa8e09a8eda962cd8096445b06ae7/SKILL.md and use it to run: build me a 6 second teaser video about why you should join alliance"
 ```
 
 Permanent global install from npm (after publish):
