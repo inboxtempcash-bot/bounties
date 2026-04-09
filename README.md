@@ -80,6 +80,20 @@ export AUTOROUTER_STRIPE_CHECKOUT_API_URL="https://yourapp.com/api/stripe/checko
 export AUTOROUTER_STRIPE_CHECKOUT_API_KEY="your-server-token"
 ```
 
+Built-in server from this repo:
+
+```bash
+export STRIPE_SECRET_KEY="sk_live_..."
+export STRIPE_WEBHOOK_SECRET="whsec_..."
+export AUTOROUTER_CHECKOUT_SERVER_TOKEN="your-server-token"
+npm run stripe:server
+
+export AUTOROUTER_STRIPE_CHECKOUT_API_URL="http://localhost:8787/api/stripe/checkout"
+export AUTOROUTER_STRIPE_CHECKOUT_API_KEY="your-server-token"
+```
+
+Detailed server setup: `server/README.md`.
+
 Real payment with one command:
 
 ```bash
