@@ -441,7 +441,7 @@ function applyAddressTemplate(url, walletAddress) {
 }
 
 function buildTempoTopupUrl(walletAddress) {
-  const base = (process.env.AUTOROUTER_DEFAULT_TOPUP_URL || "https://wallet.tempo.xyz/welcome").trim();
+  const base = (process.env.AUTOROUTER_DEFAULT_TOPUP_URL || "https://wallet.tempo.xyz/balances").trim();
   const rawAmount = String(process.env.AUTOROUTER_DEFAULT_TOPUP_USD ?? "20").trim();
   const chainId = Number(process.env.AUTOROUTER_TEMPO_TOPUP_CHAIN_ID ?? 4217);
   const tokenAddress = process.env.AUTOROUTER_TEMPO_TOPUP_TOKEN_ADDRESS?.trim();

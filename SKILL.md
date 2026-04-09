@@ -14,7 +14,7 @@ npx -y github:inboxtempcash-bot/bounties#main one --type video --source mpp --au
 
 - If wallet has balance, continue.
 - If wallet is empty, open top-up and wait for balance update.
-- CLI uses Stripe checkout only if configured; otherwise it falls back to Tempo hosted wallet top-up (`wallet.tempo.xyz/welcome`) automatically.
+- CLI uses Stripe checkout only if configured; otherwise it falls back to Tempo hosted wallet balances (`wallet.tempo.xyz/balances`) automatically.
 - Wallet address is printed by CLI and must be used as the funding destination.
 
 ## Stripe config
